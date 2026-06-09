@@ -2,6 +2,10 @@
 # Cloud Attack Detection System - Production Requirements
 # ============================================================================
 
+# Build tools (must be first)
+setuptools>=68.0.0
+wheel>=0.41.0
+
 # WSGI Server
 gunicorn==21.2.0
 
