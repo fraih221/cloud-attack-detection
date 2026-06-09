@@ -1,0 +1,47 @@
+{% extends 'layout.html' %}
+{% block auth_content %}
+<div class="auth-bg">
+    <div class="glass-card text-center" data-aos="fade-up">
+        <a href="/" class="back-home"><i class="fas fa-arrow-left me-2"></i>Back to Home</a>
+        <div class="mb-4">
+            <a href="/" class="text-white text-decoration-none">
+                <i class="fas fa-shield-halved fa-4x mb-3"></i>
+                <h2 class="fw-bold">CloudAtk-ML</h2>
+            </a>
+            <p class="opacity-75">Sign in to access the Cloud Guard Dashboard</p>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-danger border-0 bg-danger text-white bg-opacity-25 mb-4">
+            <i class="fas fa-exclamation-circle me-2"></i> {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+            <div class="mb-4 text-start">
+                <label class="form-label small fw-bold opacity-75">Username</label>
+                <div class="position-relative">
+                    <i class="fas fa-user position-absolute" style="left: 15px; top: 12px; opacity: 0.5;"></i>
+                    <input type="text" name="username" class="form-control ps-5 py-2 rounded-3" placeholder="Enter your username" required>
+                </div>
+            </div>
+            
+            <div class="mb-4 text-start">
+                <label class="form-label small fw-bold opacity-75">Password</label>
+                <div class="position-relative">
+                    <i class="fas fa-lock position-absolute" style="left: 15px; top: 12px; opacity: 0.5;"></i>
+                    <input type="password" name="password" class="form-control ps-5 py-2 rounded-3" placeholder="Enter your password" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 py-3 fw-bold rounded-3 mb-4" style="background: var(--gradient-primary); border:none;">
+                LOG IN <i class="fas fa-arrow-right ms-2"></i>
+            </button>
+        </form>
+
+        <div class="opacity-75">
+            Don't have an account? <a href="{{ url_for('register') }}" class="text-white fw-bold">Register Now</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

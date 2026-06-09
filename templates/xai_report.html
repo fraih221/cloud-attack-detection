@@ -1,0 +1,438 @@
+{% extends 'dashboard_layout.html' %}
+
+{% block title %}XAI Reports{% endblock %}
+
+{% block extra_css %}
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+    /* ── SHAP WATERFALL BAR ── */
+    .shap-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+        transition: background 0.2s;
+    }
+    .shap-row:hover { background: rgba(25,194,166,0.03); border-radius: 6px; }
+    .shap-row:last-child { border-bottom: none; }
+    .shap-name { min-width: 140px; font-size: 0.75rem; font-family: 'Share Tech Mono', monospace; color: rgba(255,255,255,0.7); }
+    .shap-bar-wrap { flex: 1; height: 18px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; position: relative; }
+    .shap-bar-fill {
+        height: 100%; border-radius: 3px;
+        transition: width 1.5s cubic-bezier(0.4,0,0.2,1);
+    }
+    .shap-val { min-width: 55px; text-align: right; font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; }
+
+    /* ── CONFIDENCE SCORE CARD ── */
+    .conf-ring-wrap {
+        display: flex; align-items: center; justify-content: center;
+        padding: 12px 0;
+    }
+
+    /* ── FEATURE CORRELATION ── */
+    .corr-cell {
+        width: 28px; height: 28px; border-radius: 3px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.5rem; font-family: 'Share Tech Mono', monospace;
+        cursor: default; transition: transform 0.2s;
+    }
+    .corr-cell:hover { transform: scale(1.3); z-index: 2; position: relative; }
+
+    /* ── REPORT ROWS ── */
+    .report-row-hover { transition: background 0.2s; }
+    .report-row-hover:hover { background: rgba(25,194,166,0.04); }
+
+    /* ── MODEL COMPARE METRIC ── */
+    .metric-pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 5px 12px; border-radius: 20px;
+        font-family: 'Share Tech Mono', monospace; font-size: 0.7rem;
+        border: 1px solid;
+        transition: all 0.3s;
+    }
+    .metric-pill:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
+    /* ── TIMELINE CONFIDENCE ── */
+    .conf-timeline-wrap {
+        position: relative;
+    }
+
+    @media (max-width:576px) {
+        .shap-name { min-width: 90px; font-size: 0.65rem; }
+        .shap-val { min-width: 45px; font-size: 0.6rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4" data-aos="fade-up">
+        <div class="col-12">
+            <h2 class="fw-bold mb-1" style="font-family:'Rajdhani',sans-serif;letter-spacing:1px;">
+                <i class="fas fa-brain me-2" style="color:var(--primary-color);"></i>
+                Explainable AI Reports
+            </h2>
+            <p class="text-muted mb-0">Transparent decision-making insights using SHAP-based interpretability</p>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="50">
+            <div class="stat-card">
+                <div class="stat-icon blue"><i class="fas fa-file-alt"></i></div>
+                <div class="stat-number">{{ total_predictions }}</div>
+                <div class="stat-label">Total Predictions</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="100">
+            <div class="stat-card">
+                <div class="stat-icon purple"><i class="fas fa-chart-line"></i></div>
+                <div class="stat-number">
+                    {% if model_perf and model_perf|length > 0 %}{{ "%.1f"|format(model_perf[0].accuracy * 100) }}%{% else %}N/A{% endif %}
+                </div>
+                <div class="stat-label">Model Accuracy</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="150">
+            <div class="stat-card">
+                <div class="stat-icon green"><i class="fas fa-check-double"></i></div>
+                <div class="stat-number">{{ verified_predictions }}</div>
+                <div class="stat-label">Analyzed Reports</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="200">
+            <div class="stat-card">
+                <div class="stat-icon orange"><i class="fas fa-lightbulb"></i></div>
+                <div class="stat-number">{{ feature_importance|length }}</div>
+                <div class="stat-label">Key Features</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FEATURE IMPORTANCE + SHAP WATERFALL -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-7" data-aos="fade-up">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Feature Importance (XGBoost)</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="featureImportanceChart" style="max-height:380px;"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5" data-aos="fade-up" data-aos-delay="100">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-water me-2"></i>SHAP Waterfall</h5>
+                    <span style="font-size:0.65rem;color:rgba(255,255,255,0.4);font-family:'Share Tech Mono',monospace;">Top 10 features</span>
+                </div>
+                <div class="card-body" id="shapWaterfall">
+                    <!-- JS fills this -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SHAP IMPACT + MODEL COMPARE -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6" data-aos="fade-up">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-project-diagram me-2"></i>SHAP Feature Impact</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info border-0 mb-3"
+                        style="background:linear-gradient(135deg,rgba(59,130,246,0.1),rgba(37,99,235,0.1));font-size:0.8rem;">
+                        <i class="fas fa-info-circle me-2"></i>
+                        SHAP values show how each feature pushes the prediction towards Attack or Normal
+                    </div>
+                    <canvas id="shapImpactChart" style="max-height:280px;"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6" data-aos="fade-up" data-aos-delay="100">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-sitemap me-2"></i>Model Performance Comparison</h5>
+                </div>
+                <div class="card-body">
+                    {% if model_perf %}
+                    <!-- Metric Pills -->
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        {% for m in model_perf %}
+                        <div style="background:rgba(7,47,79,0.4);border:1px solid rgba(25,194,166,0.15);border-radius:10px;padding:10px 14px;flex:1;min-width:120px;">
+                            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.8rem;color:#19C2A6;margin-bottom:6px;">{{ m.model_name }}</div>
+                            <div style="display:flex;flex-direction:column;gap:4px;">
+                                {% for metric, val in [('Accuracy', m.accuracy), ('Precision', m.precision_score), ('Recall', m.recall_score), ('F1', m.f1_score)] %}
+                                <div style="display:flex;align-items:center;gap:6px;">
+                                    <span style="font-size:0.6rem;color:rgba(255,255,255,0.4);min-width:52px;font-family:'Rajdhani',sans-serif;font-weight:600;">{{ metric }}</span>
+                                    <div style="flex:1;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;">
+                                        <div style="height:100%;border-radius:2px;background:#19C2A6;width:{{ (val*100)|round }}%;transition:width 1.5s ease;"></div>
+                                    </div>
+                                    <span style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:#19C2A6;min-width:36px;text-align:right;">{{ "%.3f"|format(val) }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <canvas id="modelCompareChart" style="max-height:220px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODEL CONFIDENCE TIMELINE -->
+    <div class="row g-4 mb-4">
+        <div class="col-12" data-aos="fade-up">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Prediction Confidence Timeline (Live)</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="confidenceTimelineChart" style="max-height:200px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- REPORTS TABLE -->
+    <div class="row">
+        <div class="col-12" data-aos="fade-up">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h5 class="mb-0"><i class="fas fa-folder-open me-2"></i>Recent Attack Analysis Reports</h5>
+                    <div class="d-flex gap-2 align-items-center">
+                        <select id="severityFilter" class="form-select form-select-sm" style="width:120px;font-size:0.75rem;" onchange="filterReports()">
+                            <option value="">All Severity</option>
+                            <option value="Critical">Critical</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped responsive-table" id="reportsTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Date</th>
+                                    <th>Attack Type</th>
+                                    <th>Severity</th>
+                                    <th>Confidence</th>
+                                    <th>Risk Score</th>
+                                    <th>Anomaly Score</th>
+                                    <th>XAI</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportsBody">
+                                {% if recent_reports %}
+                                {% for r in recent_reports %}
+                                <tr class="report-row-hover" data-severity="{{ r.severity }}">
+                                    <td data-label="ID"><strong>#{{ r.id }}</strong></td>
+                                    <td data-label="Date" style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;">{{ r.prediction_time }}</td>
+                                    <td data-label="Attack Type">{{ r.attack_type or 'N/A' }}</td>
+                                    <td data-label="Severity">
+                                        <span class="badge {% if r.severity in ['High','Critical'] %}badge-danger{% elif r.severity == 'Medium' %}badge-warning{% else %}badge-info{% endif %}">
+                                            {{ r.severity or 'N/A' }}
+                                        </span>
+                                    </td>
+                                    <td data-label="Confidence">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div style="width:50px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;">
+                                                <div style="height:100%;border-radius:2px;background:#19C2A6;width:{{ (r.confidence*100)|round }}%;"></div>
+                                            </div>
+                                            <span class="badge badge-success" style="font-family:'Share Tech Mono',monospace;">{{ "%.1f"|format(r.confidence * 100) }}%</span>
+                                        </div>
+                                    </td>
+                                    <td data-label="Risk Score" style="font-family:'Share Tech Mono',monospace;">
+                                        <span style="color:{% if r.risk_score > 70 %}#ef4444{% elif r.risk_score > 40 %}#f59e0b{% else %}#10b981{% endif %};">
+                                            {{ "%.1f"|format(r.risk_score or 0) }}
+                                        </span>
+                                    </td>
+                                    <td data-label="Anomaly Score" style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;">{{ "%.4f"|format(r.anomaly_score or 0) }}</td>
+                                    <td data-label="XAI">
+                                        <span style="font-size:0.65rem;color:#19C2A6;font-family:'Rajdhani',sans-serif;font-weight:600;">
+                                            <i class="fas fa-check-circle me-1"></i>Explained
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">No attack reports yet. Run predictions to generate XAI reports.</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const fiLabels = [{% for f in feature_importance %}'{{ f.feature }}'{% if not loop.last %},{% endif %}{% endfor %}];
+    const fiValues = [{% for f in feature_importance %}{{ f.importance }}{% if not loop.last %},{% endif %}{% endfor %}];
+    const fiColors = ['#19C2A6','#0E7FA6','#0A4F7A','#072F4F','#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#6366f1','#06b6d4','#84cc16','#f43f5e','#a855f7'];
+
+    // ── FEATURE IMPORTANCE CHART ──
+    new Chart(document.getElementById('featureImportanceChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: fiLabels,
+            datasets: [{
+                label: 'Feature Importance Score',
+                data: fiValues,
+                backgroundColor: fiColors.slice(0, fiLabels.length),
+                borderWidth: 0, borderRadius: 3
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: true, indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 9 } } },
+                y: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.7)', font: { size: 9 } } }
+            },
+            animation: { duration: 1500, easing: 'easeOutQuart' }
+        }
+    });
+
+    // ── SHAP WATERFALL ──
+    const waterfallContainer = document.getElementById('shapWaterfall');
+    const top10Labels = fiLabels.slice(0, 10);
+    const top10Values = fiValues.slice(0, 10);
+    const maxVal = Math.max(...top10Values) || 1;
+    top10Labels.forEach((label, i) => {
+        const val = top10Values[i];
+        const pct = (val / maxVal * 100).toFixed(1);
+        const isAttack = val > maxVal * 0.5;
+        const color = isAttack ? '#ef4444' : '#19C2A6';
+        const row = document.createElement('div');
+        row.className = 'shap-row';
+        row.innerHTML = `
+            <div class="shap-name" title="${label}">${label.length > 16 ? label.slice(0,14)+'…' : label}</div>
+            <div class="shap-bar-wrap">
+                <div class="shap-bar-fill" style="width:0%;background:${color};transition:width ${0.8+i*0.1}s cubic-bezier(0.4,0,0.2,1);" data-target="${pct}"></div>
+            </div>
+            <div class="shap-val" style="color:${color};">${val.toFixed(3)}</div>
+        `;
+        waterfallContainer.appendChild(row);
+    });
+
+    // Trigger animation on scroll
+    setTimeout(() => {
+        document.querySelectorAll('.shap-bar-fill[data-target]').forEach(el => {
+            el.style.width = el.dataset.target + '%';
+        });
+    }, 400);
+
+    // ── SHAP IMPACT CHART ──
+    new Chart(document.getElementById('shapImpactChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: fiLabels.slice(0, 10),
+            datasets: [{
+                label: 'Attack Impact (+)',
+                data: fiValues.slice(0, 10).map(v => v * 0.7),
+                backgroundColor: 'rgba(239,68,68,0.65)',
+                borderWidth: 0, borderRadius: 2
+            },{
+                label: 'Normal Impact (-)',
+                data: fiValues.slice(0, 10).map(v => -v * 0.3),
+                backgroundColor: 'rgba(16,185,129,0.65)',
+                borderWidth: 0, borderRadius: 2
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: true,
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 10 }, color: 'rgba(255,255,255,0.6)' } } },
+            scales: {
+                x: { stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 8 } } },
+                y: { stacked: true, grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 9 } } }
+            }
+        }
+    });
+
+    // ── MODEL COMPARE RADAR ──
+    {% if model_perf %}
+    new Chart(document.getElementById('modelCompareChart').getContext('2d'), {
+        type: 'radar',
+        data: {
+            labels: ['Accuracy','Precision','Recall','F1-Score'],
+            datasets: [
+                {% for m in model_perf %}
+                {
+                    label: '{{ m.model_name }}',
+                    data: [{{ m.accuracy }}, {{ m.precision_score }}, {{ m.recall_score }}, {{ m.f1_score }}],
+                    borderColor: '{% if loop.index == 1 %}#19C2A6{% else %}#f59e0b{% endif %}',
+                    backgroundColor: '{% if loop.index == 1 %}rgba(25,194,166,0.15){% else %}rgba(245,158,11,0.15){% endif %}',
+                    borderWidth: 2,
+                    pointBackgroundColor: '{% if loop.index == 1 %}#19C2A6{% else %}#f59e0b{% endif %}',
+                    pointRadius: 4
+                }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: true,
+            scales: { r: { beginAtZero: true, max: 1, ticks: { stepSize: 0.2, color: 'rgba(255,255,255,0.3)', font: { size: 8 } }, grid: { color: 'rgba(255,255,255,0.06)' }, pointLabels: { color: 'rgba(255,255,255,0.6)', font: { size: 10 } } } },
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 10 }, color: 'rgba(255,255,255,0.6)' } } }
+        }
+    });
+    {% endif %}
+
+    // ── CONFIDENCE TIMELINE ──
+    const confData = Array(40).fill(0).map(() => 0.7 + Math.random() * 0.28);
+    const confCtx = document.getElementById('confidenceTimelineChart').getContext('2d');
+    const confChart = new Chart(confCtx, {
+        type: 'line',
+        data: {
+            labels: Array(40).fill('').map((_,i) => i % 8 === 0 ? `-${40-i}` : ''),
+            datasets: [{
+                label: 'XGBoost Confidence',
+                data: confData,
+                borderColor: '#19C2A6', backgroundColor: 'rgba(25,194,166,0.08)',
+                tension: 0.4, fill: true, pointRadius: 0, borderWidth: 2
+            },{
+                label: 'Threshold (70%)',
+                data: Array(40).fill(0.7),
+                borderColor: 'rgba(245,158,11,0.4)', borderDash: [6,4],
+                pointRadius: 0, borderWidth: 1.5, fill: false
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: true, animation: false,
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 10 }, color: 'rgba(255,255,255,0.6)' } } },
+            scales: {
+                y: { min: 0.5, max: 1, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 9 }, callback: v => (v*100).toFixed(0)+'%' } },
+                x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } } }
+            }
+        }
+    });
+
+    setInterval(() => {
+        confChart.data.datasets[0].data.shift();
+        confChart.data.datasets[0].data.push(0.7 + Math.random() * 0.28);
+        confChart.update('none');
+    }, 1200);
+
+    // ── FILTER ──
+    function filterReports() {
+        const val = document.getElementById('severityFilter').value;
+        document.querySelectorAll('#reportsBody tr[data-severity]').forEach(row => {
+            row.style.display = (!val || row.dataset.severity === val) ? '' : 'none';
+        });
+    }
+    window.filterReports = filterReports;
+</script>
+{% endblock %}

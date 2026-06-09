@@ -1,0 +1,204 @@
+{% extends 'layout.html' %}
+{% block external_content %}
+<style>
+    .hero-section {
+        min-height: 100vh;
+        background: linear-gradient(135deg, rgba(7, 47, 79, 0.95), rgba(25, 194, 166, 0.85)),
+            url('https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1920&q=80');
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: white;
+        padding-top: 80px;
+        border-radius: 0 0 80px 80px;
+        position: relative;
+        overflow: hidden;
+        z-index: 5;
+    }
+
+    .hero-section::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60"><path d="M60 0L0 0 0 60" fill="none" stroke="rgba(25, 194, 166, 0.15)" stroke-width="0.5"/></svg>');
+        z-index: -1;
+    }
+
+    .hero-section::after {
+        content: '';
+        position: absolute;
+        width: 200%;
+        height: 200%;
+        top: -50%;
+        left: -50%;
+        background: radial-gradient(circle, rgba(25, 194, 166, 0.1) 0%, transparent 70%);
+        animation: rotate 20s linear infinite;
+        z-index: -1;
+    }
+
+    @keyframes rotate {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .hero-title {
+        font-size: 5rem;
+        font-weight: 900;
+        letter-spacing: 2px;
+        margin-bottom: 0.5rem;
+        word-break: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .hero-subtitle-box {
+        font-size: 2rem;
+        font-weight: 700;
+        background: white;
+        color: var(--primary-color);
+        display: inline-block;
+        padding: 5px 25px;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+    }
+
+    .hero-description {
+        font-size: 1.2rem;
+        max-width: 800px;
+        margin: 0 auto 3rem;
+        opacity: 0.9;
+    }
+
+    @media (max-width: 768px) {
+        .hero-title { font-size: 2.8rem; letter-spacing: 0; }
+        .hero-subtitle-box { font-size: 1.3rem; padding: 4px 18px; }
+        .hero-description { font-size: 1rem; }
+    }
+    @media (max-width: 576px) {
+        .hero-title { font-size: 2.2rem; }
+        .hero-subtitle-box { font-size: 1.1rem; padding: 4px 14px; }
+        .hero-description { font-size: 0.9rem; }
+        .hero-section { padding: 0 1rem !important; }
+    }
+
+    .feature-card {
+        background: white;
+        padding: 40px;
+        border-radius: 20px;
+        border: 1px solid #eee;
+        transition: 0.3s;
+        height: 100%;
+    }
+
+    .feature-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
+    }
+
+    .feature-icon {
+        font-size: 2.5rem;
+        color: var(--primary-color);
+        margin-bottom: 1.5rem;
+    }
+</style>
+
+<!-- Hero -->
+<section class="hero-section" id="home">
+    <div class="container" data-aos="zoom-in">
+        <i class="fas fa-shield-halved fa-5x mb-4 text-white"></i>
+        <h1 class="hero-title">CloudAtk-ML</h1>
+        <div class="hero-subtitle-box">Cloud Defense System</div>
+        <p class="hero-description">Detecting Attacks in Cloud Computing using Machine Learning<br>"Securing the
+            Kingdom's Digital Future"</p>
+        <div class="d-flex justify-content-center gap-3">
+            <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg px-5 rounded-pill"
+                style="background: var(--gradient-primary); border:none;">Get Started</a>
+            <a href="{{ url_for('login') }}" class="btn btn-outline-light btn-lg px-5 rounded-pill">Access Portal</a>
+        </div>
+    </div>
+</section>
+
+<!-- Features -->
+<section class="py-5" id="features" style="margin-top: 100px;">
+    <div class="container py-5">
+        <div class="text-center mb-5" data-aos="fade-up">
+            <h2 class="display-5 fw-bold">Platform Capabilities</h2>
+            <p class="text-muted">Advanced features for cloud infrastructure protection</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-4" data-aos="fade-up">
+                <div class="feature-card text-center">
+                    <i class="fas fa-microchip feature-icon"></i>
+                    <h4>Hybrid ML Models</h4>
+                    <p class="text-muted">Combining XGBoost and Isolation Forest for 98% detection accuracy.</p>
+                </div>
+            </div>
+            <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
+                <div class="feature-card text-center">
+                    <i class="fas fa-bolt feature-icon"></i>
+                    <h4>Real-time Defense</h4>
+                    <p class="text-muted">Instant classification of network traffic into Normal or Malicious.</p>
+                </div>
+            </div>
+            <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
+                <div class="feature-card text-center">
+                    <i class="fas fa-eye feature-icon"></i>
+                    <h4>Explainable AI</h4>
+                    <p class="text-muted">Transparent decision making with SHAP-based interpretability.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- About -->
+<section class="py-5 bg-white" id="about">
+    <div class="container py-5">
+        <div class="row align-items-center">
+            <div class="col-lg-6" data-aos="fade-right">
+                <h2 class="display-5 fw-bold mb-4">Securing Cloud Assets</h2>
+                <p class="lead mb-4">Our system is designed to proactively detect and mitigate security issues in cloud
+                    environments.</p>
+                <ul class="list-unstyled">
+                    <li class="mb-3"><i class="fas fa-check-circle text-success me-2"></i> Hybrid Supervised &
+                        Unsupervised Learning</li>
+                    <li class="mb-3"><i class="fas fa-check-circle text-success me-2"></i> Real-time Monitoring
+                        Dashboard</li>
+                    <li><i class="fas fa-check-circle text-success me-2"></i> Detailed Attack Logging & Analysis</li>
+                </ul>
+            </div>
+            <div class="col-lg-6" data-aos="fade-left">
+                <img src="/static/img/about.png"
+                    class="img-fluid rounded-4 shadow" alt="Cloud Security">
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Contact -->
+<section class="py-5" id="contact">
+    <div class="container py-5 text-center" data-aos="flip-up">
+        <div class="bg-dark text-white p-5 rounded-4">
+            <h2 class="display-6 fw-bold mb-4">Ready to secure your cloud?</h2>
+            <p class="mb-5 opacity-75">Connect with our team for more information or a live demo.</p>
+            <a href="mailto:support@cloudatk.ml" class="btn btn-light btn-lg px-5 rounded-pill">Contact Us</a>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="raqeeb-footer">
+    <div class="container text-center">
+        <h3 class="fw-bold mb-4">CloudAtk-ML</h3>
+        <p class="opacity-75 mb-4 mx-auto" style="max-width: 600px;">Protecting sensitive data and ensuring the
+            availability and integrity of cloud services through advanced machine learning.</p>
+        <p class="small opacity-50">&copy; 2026 CloudAtk-ML. All rights reserved.</p>
+    </div>
+</footer>
+{% endblock %}

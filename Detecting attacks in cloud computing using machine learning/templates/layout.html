@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>CloudAtk-ML - Detecting Attacks in Cloud Computing</title>
+    <meta name="description" content="CloudAtk-ML: Advanced cloud attack detection system using hybrid machine learning (XGBoost + Isolation Forest) with explainable AI. Detect and classify 9 attack types in real-time.">
+    <meta name="keywords" content="cloud security, attack detection, machine learning, XGBoost, Isolation Forest, SHAP, XAI, cybersecurity, UNSW-NB15, threat detection, network security">
+    <meta name="author" content="CloudAtk-ML">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#072F4F">
+    <meta name="color-scheme" content="light">
+    <meta property="og:title" content="CloudAtk-ML - Cloud Defense System">
+    <meta property="og:description" content="Detecting Attacks in Cloud Computing using Machine Learning. Hybrid ML system with XGBoost + Isolation Forest + SHAP/XAI for real-time attack detection.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="/static/img/logo.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="CloudAtk-ML - Cloud Defense System">
+    <meta name="twitter:description" content="Advanced cloud attack detection using hybrid machine learning with explainable AI.">
+    <link rel="icon" type="image/png" href="/static/img/logo.png">
+    <link rel="apple-touch-icon" href="/static/img/logo.png">
+
+    <!-- Fonts and Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+
+    <style>
+        :root {
+            /* Updated Palette */
+            --primary-color: #19C2A6;
+            --secondary-color: #0E7FA6;
+            --dark-color: #072F4F;
+            --mid-dark-color: #0A4F7A;
+            --accent-color: #ffffff;
+            --light-color: #f0fdfa;
+            --border-color: #e2e8f0;
+            --gradient-primary: linear-gradient(135deg, #19C2A6 0%, #0E7FA6 100%);
+            --sidebar-width: 260px;
+            --transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        input, select, textarea, table, .form-control, .card, .badge, .alert,
+        code, pre, canvas {
+            font-feature-settings: "lnum" 1, "tnum" 1 !important;
+            -webkit-locale: "en" !important;
+        }
+
+        input[type="number"] {
+            direction: ltr !important;
+            text-align: left !important;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9;
+            margin: 0;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* Curved Navbar */
+        .external-navbar {
+            background: linear-gradient(90deg, #072F4F 0%, #0A4F7A 50%, #072F4F 100%);
+            backdrop-filter: blur(20px);
+            padding: 1rem 2rem;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            border-bottom: 1px solid rgba(25, 194, 166, 0.3);
+            border-radius: 0 0 40px 40px;
+            /* Added Curve */
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .navbar-brand {
+            font-weight: 900;
+            font-size: 1.6rem;
+            color: var(--accent-color) !important;
+            letter-spacing: 1px;
+            text-shadow: 0 2px 10px rgba(25, 194, 166, 0.4);
+        }
+
+        .nav-link {
+            color: rgba(255, 255, 255, 0.9) !important;
+            font-weight: 600;
+            margin: 0 15px;
+            transition: var(--transition);
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color) !important;
+            transform: translateY(-2px);
+        }
+
+        /* Adjusted Footer */
+        .raqeeb-footer {
+            background: linear-gradient(135deg, rgba(7, 47, 79, 0.98), rgba(25, 194, 166, 0.95));
+            color: white;
+            padding: 80px 0 40px;
+            /* Reduced padding */
+            border-radius: 80px 80px 0 0;
+            position: relative;
+            margin-top: 100px;
+            /* Changed from negative to positive to fix height */
+            z-index: 10;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
+        }
+
+        /* Sidebar & Auth Layouts */
+        .internal-wrapper {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            background: linear-gradient(135deg, #19C2A6 0%, #0E7FA6 45%, #0A4F7A 75%, #072F4F 100%);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            z-index: 1000;
+            box-shadow: 5px 0 25px rgba(7, 47, 79, 0.2);
+            overflow-y: auto;
+            scrollbar-width: none;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .menu-item {
+            padding: 15px 25px;
+            display: flex;
+            align-items: center;
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            transition: var(--transition);
+            border-left: 4px solid transparent;
+        }
+
+        .menu-item:hover,
+        .menu-item.active {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            border-left-color: var(--accent-color);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .main-content {
+            flex: 1;
+            margin-left: var(--sidebar-width);
+            padding: 2rem;
+            background: #f1f5f9;
+        }
+
+        /* Auth Glassmorphism */
+        .auth-bg {
+            min-height: 100vh;
+            background: linear-gradient(135deg, rgba(7, 47, 79, 0.9), rgba(25, 194, 166, 0.7)),
+                url('https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1920&q=80');
+            background-size: cover;
+            background-attachment: fixed;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            position: relative;
+        }
+
+        .auth-bg::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="none" stroke="rgba(25, 194, 166, 0.1)" stroke-width="0.5"/></svg>');
+            pointer-events: none;
+        }
+
+        .glass-card {
+            background: rgba(7, 47, 79, 0.6);
+            backdrop-filter: blur(25px);
+            border: 1px solid rgba(25, 194, 166, 0.4);
+            border-radius: 40px;
+            padding: 3rem;
+            width: 100%;
+            max-width: 500px;
+            color: white;
+            position: relative;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4), inset 0 0 20px rgba(25, 194, 166, 0.1);
+        }
+
+        .glass-card .form-control {
+            background: rgba(255, 255, 255, 0.05) !important;
+            border: 1px solid rgba(25, 194, 166, 0.3) !important;
+            color: white !important;
+            transition: var(--transition);
+        }
+
+        .glass-card .form-control:focus {
+            background: rgba(255, 255, 255, 0.1) !important;
+            border-color: var(--primary-color) !important;
+            box-shadow: 0 0 15px rgba(25, 194, 166, 0.3);
+        }
+
+        .glass-card .form-control::placeholder {
+            color: rgba(255, 255, 255, 0.5) !important;
+        }
+
+        .back-home {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            text-decoration: none;
+            font-size: 0.9rem;
+            opacity: 0.7;
+            transition: 0.3s;
+        }
+
+        .back-home:hover {
+            opacity: 1;
+            transform: translateX(-5px);
+        }
+
+        @media (max-width: 991px) {
+            .navbar { border-radius: 0 0 20px 20px; padding: 0.5rem 1rem; }
+            .nav-link { margin: 0 5px; font-size: 0.8rem; letter-spacing: 0; }
+        }
+        @media (max-width: 768px) {
+            .raqeeb-footer { padding: 40px 0 25px; border-radius: 40px 40px 0 0; margin-top: 60px; }
+            .glass-card { padding: 2rem !important; }
+        }
+        @media (max-width: 576px) {
+            .navbar { border-radius: 0 0 15px 15px; }
+            .navbar-brand { font-size: 1.2rem; }
+            .raqeeb-footer { border-radius: 30px 30px 0 0; margin-top: 40px; }
+            .auth-bg { padding: 1rem; }
+            .glass-card { padding: 1.5rem !important; max-width: 100%; }
+        }
+    </style>
+</head>
+
+<body>
+
+    {% if 'user_id' not in session and request.path not in ['/login', '/register'] %}
+    <nav class="navbar navbar-expand-lg external-navbar">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-shield-halved me-2"></i>CloudAtk-ML
+            </a>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav mx-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#features">Features</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#about">About</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#contact">Contact</a></li>
+                </ul>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('login') }}" class="btn text-white fw-bold">Login</a>
+                    <a href="{{ url_for('register') }}" class="btn btn-primary px-4 rounded-pill"
+                        style="background: var(--gradient-primary); border:none; box-shadow: 0 4px 15px rgba(25, 194, 166, 0.4);">Register</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <div class="content-wrapper">
+        {% block external_content %}{% endblock %}
+    </div>
+    {% elif request.path in ['/login', '/register'] %}
+    {% block auth_content %}{% endblock %}
+    {% else %}
+    <div class="internal-wrapper">
+        <div class="sidebar">
+            <div class="sidebar-header mt-3"
+                style="padding: 2rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: center;">
+                <h4 class="fw-bold text-white mb-0"><i class="fas fa-shield-halved me-2"></i>CloudAtk</h4>
+            </div>
+            <ul class="list-unstyled mt-4 p-3">
+                <li><a href="{{ url_for('dashboard') }}"
+                        class="menu-item {% if request.path == '/dashboard' %}active{% endif %}"
+                        style="border-radius: 12px; margin-bottom: 5px;"><i
+                            class="fas fa-chart-line me-3"></i>Dashboard</a></li>
+                <li><a href="{{ url_for('predict') }}"
+                        class="menu-item {% if request.path == '/predict' %}active{% endif %}"
+                        style="border-radius: 12px; margin-bottom: 5px;"><i class="fas fa-radar me-3"></i>Live
+                        Detection</a></li>
+                <li><a href="{{ url_for('analyze') }}"
+                        class="menu-item {% if request.path == '/analyze' %}active{% endif %}"
+                        style="border-radius: 12px; margin-bottom: 5px;"><i
+                            class="fas fa-microscope me-3"></i>Analysis</a></li>
+                <li><a href="{{ url_for('logout') }}" class="menu-item text-danger mt-5" style="border-radius: 12px;"><i
+                            class="fas fa-sign-out-alt me-3"></i>Logout</a></li>
+            </ul>
+        </div>
+        <div class="main-content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>AOS.init({ duration: 800, once: true });</script>
+</body>
+
+</html>

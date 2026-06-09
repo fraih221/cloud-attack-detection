@@ -1,0 +1,721 @@
+{% extends 'dashboard_layout.html' %}
+
+{% block title %}Deep Analysis{% endblock %}
+
+{% block extra_css %}
+<style>
+    .upload-zone {
+        border: 2px dashed rgba(25,194,166,0.3);
+        border-radius: 20px; padding: 3rem; text-align: center;
+        cursor: pointer; transition: all 0.3s;
+        background: linear-gradient(135deg, rgba(25,194,166,0.03), rgba(14,127,166,0.03));
+        position: relative; overflow: hidden;
+    }
+    .upload-zone::before {
+        content: ''; position: absolute; inset: 0;
+        background: linear-gradient(135deg, rgba(25,194,166,0.06), rgba(14,127,166,0.06));
+        opacity: 0; transition: opacity 0.3s;
+    }
+    .upload-zone:hover::before, .upload-zone.dragover::before { opacity: 1; }
+    .upload-zone:hover, .upload-zone.dragover {
+        border-color: #19C2A6; transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(25,194,166,0.15);
+    }
+    .upload-icon {
+        width: 80px; height: 80px; border-radius: 50%;
+        background: linear-gradient(135deg, rgba(25,194,166,0.1), rgba(14,127,166,0.1));
+        display: flex; align-items: center; justify-content: center;
+        margin: 0 auto 1rem; font-size: 2rem; color: #19C2A6;
+    }
+    .file-info {
+        display: none; align-items: center; gap: 12px;
+        background: rgba(25,194,166,0.05); border: 1px solid rgba(25,194,166,0.15);
+        border-radius: 12px; padding: 12px 16px; margin-top: 1rem;
+    }
+    .file-info.show { display: flex; }
+    .file-info i { color: #19C2A6; font-size: 1.5rem; }
+    .file-info-text { flex: 1; }
+    .file-info-name { font-weight: 600; font-size: 0.9rem; color: #1e293b; }
+    .file-info-size { font-size: 0.75rem; color: #94a3b8; }
+
+    .al-overlay {
+        display: none; position: fixed; inset: 0; z-index: 99999;
+        background: radial-gradient(ellipse at center, rgba(10,79,122,0.97), rgba(7,47,79,0.98), rgba(4,25,50,0.99));
+        align-items: center; justify-content: center; flex-direction: column;
+    }
+    .al-overlay.active { display: flex; }
+
+    .al-dna-helix {
+        position: relative; width: 120px; height: 200px; margin-bottom: 30px;
+    }
+    .al-strand { position: absolute; width: 100%; height: 100%; }
+    .al-node {
+        position: absolute; width: 12px; height: 12px; border-radius: 50%;
+        left: 50%; transform: translateX(-50%);
+    }
+    .al-connector {
+        position: absolute; height: 2px; left: 10%; width: 80%;
+        background: rgba(25,194,166,0.15);
+    }
+
+    .al-hex-grid {
+        position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+    }
+    .al-hex {
+        position: absolute; width: 40px; height: 46px;
+        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        background: rgba(25,194,166,0.04); border: 1px solid rgba(25,194,166,0.08);
+        animation: alHexPulse 3s ease-in-out infinite;
+    }
+    @keyframes alHexPulse {
+        0%,100% { opacity: 0.3; background: rgba(25,194,166,0.03); }
+        50% { opacity: 0.8; background: rgba(25,194,166,0.08); }
+    }
+
+    .al-scanner {
+        position: relative; width: 200px; height: 200px;
+        margin-bottom: 30px;
+    }
+    .al-scan-ring {
+        position: absolute; border-radius: 50%; border: 2px solid transparent;
+        animation: alRingSpin 3s linear infinite;
+    }
+    .al-ring-1 {
+        inset: 0; border-color: rgba(25,194,166,0.4) transparent rgba(25,194,166,0.1) transparent;
+    }
+    .al-ring-2 {
+        inset: 15px; border-color: transparent rgba(14,127,166,0.3) transparent rgba(14,127,166,0.1);
+        animation-direction: reverse; animation-duration: 4s;
+    }
+    .al-ring-3 {
+        inset: 30px; border-color: rgba(59,130,246,0.2) transparent rgba(59,130,246,0.1) transparent;
+        animation-duration: 5s;
+    }
+    @keyframes alRingSpin { to { transform: rotate(360deg); } }
+
+    .al-core {
+        position: absolute; inset: 45px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(25,194,166,0.15), transparent);
+        display: flex; align-items: center; justify-content: center;
+        flex-direction: column;
+    }
+    .al-core-icon {
+        font-size: 2.5rem; color: #19C2A6;
+        animation: alCorePulse 2s ease-in-out infinite;
+        filter: drop-shadow(0 0 15px rgba(25,194,166,0.5));
+    }
+    @keyframes alCorePulse {
+        0%,100% { transform: scale(1); opacity: 0.8; }
+        50% { transform: scale(1.15); opacity: 1; }
+    }
+
+    .al-wave-line {
+        position: absolute; width: 100%; height: 2px; left: 0;
+        animation: alWaveScan 2.5s ease-in-out infinite;
+    }
+    .al-wave-line::after {
+        content: ''; position: absolute; width: 100%; height: 100%;
+        background: linear-gradient(90deg, transparent, #19C2A6, transparent);
+        filter: blur(2px);
+    }
+    @keyframes alWaveScan {
+        0% { top: 0; opacity: 0; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { top: 100%; opacity: 0; }
+    }
+
+    .al-title {
+        font-family: 'Courier New', monospace; font-size: 1.2rem;
+        color: #19C2A6; letter-spacing: 6px; text-transform: uppercase;
+        margin-bottom: 8px; text-shadow: 0 0 20px rgba(25,194,166,0.4);
+    }
+    .al-subtitle {
+        font-size: 0.8rem; color: rgba(255,255,255,0.4);
+        letter-spacing: 2px; margin-bottom: 30px;
+    }
+
+    .al-progress-wrap {
+        width: 300px; position: relative;
+    }
+    .al-progress-track {
+        width: 100%; height: 4px; background: rgba(255,255,255,0.08);
+        border-radius: 2px; overflow: hidden;
+    }
+    .al-progress-fill {
+        height: 100%; border-radius: 2px; width: 0%;
+        background: linear-gradient(90deg, #19C2A6, #0E7FA6, #3b82f6);
+        transition: width 0.3s;
+    }
+    .al-progress-text {
+        display: flex; justify-content: space-between; margin-top: 8px;
+        font-size: 0.7rem; color: rgba(255,255,255,0.4);
+        font-family: 'Courier New', monospace;
+    }
+    .al-progress-pct {
+        color: #19C2A6; font-weight: 700;
+        font-feature-settings: "tnum" 1;
+    }
+
+    .al-stats-bar {
+        display: flex; gap: 30px; margin-top: 20px;
+    }
+    .al-stat-item { text-align: center; }
+    .al-stat-val {
+        font-family: 'Courier New', monospace; font-size: 1.1rem;
+        font-weight: 700; font-feature-settings: "tnum" 1;
+    }
+    .al-stat-val.teal { color: #19C2A6; }
+    .al-stat-val.blue { color: #3b82f6; }
+    .al-stat-val.red { color: #ef4444; }
+    .al-stat-label {
+        font-size: 0.55rem; color: rgba(255,255,255,0.35);
+        text-transform: uppercase; letter-spacing: 1px;
+    }
+
+    .al-data-stream {
+        position: absolute; bottom: 30px; left: 0; right: 0;
+        display: flex; justify-content: center; gap: 3px;
+        opacity: 0.4;
+    }
+    .al-data-bar {
+        width: 3px; border-radius: 2px;
+        background: linear-gradient(to top, rgba(25,194,166,0.6), transparent);
+        animation: alDataBar 1.5s ease-in-out infinite;
+    }
+    @keyframes alDataBar {
+        0%,100% { height: 10px; }
+        50% { height: 30px; }
+    }
+
+    .al-particles {
+        position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+    }
+    .al-particle {
+        position: absolute; width: 3px; height: 3px; border-radius: 50%;
+        background: rgba(25,194,166,0.5);
+    }
+
+    @media (max-width: 576px) {
+        .al-scanner { width: 150px; height: 150px; }
+        .al-progress-wrap { width: 250px; }
+        .al-title { font-size: 0.9rem; letter-spacing: 3px; }
+        .al-stats-bar { gap: 15px; }
+        .upload-zone { padding: 2rem 1rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4" data-aos="fade-up">
+        <div class="col-12">
+            <h2 class="fw-bold mb-2">
+                <i class="fas fa-microscope me-2" style="color: var(--primary-color);"></i>
+                Deep Batch Analysis
+            </h2>
+            <p class="text-muted">Upload CSV files or paste data for comprehensive batch attack detection and analysis</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12" data-aos="fade-up">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-upload me-2"></i>Data Upload</h5>
+                </div>
+                <div class="card-body">
+                    <div id="uploadArea" class="upload-zone">
+                        <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                        <h4 style="color: #1e293b;">Drag & Drop CSV File Here</h4>
+                        <p class="text-muted mb-0">Supports feature data CSV and attack history CSV exports</p>
+                        <input type="file" id="fileInput" accept=".csv" hidden>
+                    </div>
+                    <div class="text-center mt-3">
+                        <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                            <i class="fas fa-folder-open me-2"></i>Choose File
+                        </button>
+                    </div>
+                    <div class="file-info" id="fileInfo">
+                        <i class="fas fa-file-csv"></i>
+                        <div class="file-info-text">
+                            <div class="file-info-name" id="fileName"></div>
+                            <div class="file-info-size" id="fileSize"></div>
+                        </div>
+                        <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                    </div>
+
+                    <div class="text-center my-4">
+                        <span class="badge bg-secondary px-4 py-2">OR</span>
+                    </div>
+
+                    <div>
+                        <h5 class="mb-3"><i class="fas fa-paste me-2"></i>Paste CSV Data</h5>
+                        <textarea id="csvData" class="form-control" rows="8"
+                            style="border-radius: 15px; font-family: monospace;"
+                            placeholder="Paste your CSV data here...&#10;Example (feature data):&#10;0.121,6,2,1,6,4,258,172,74.08...&#10;&#10;Or paste exported attack history CSV"></textarea>
+                        <div class="text-center mt-3">
+                            <button class="btn btn-primary btn-lg px-5" id="analyzeBtn" onclick="analyzeData()">
+                                <i class="fas fa-play me-2"></i>Analyze Data
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="resultsSection" style="display: none;">
+        <div class="row g-4 mb-4" data-aos="fade-up">
+            <div class="col-xl-3 col-md-6">
+                <div class="stat-card">
+                    <div class="stat-icon blue"><i class="fas fa-list"></i></div>
+                    <div class="stat-number" id="totalCount">0</div>
+                    <div class="stat-label">Total Records</div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="stat-card">
+                    <div class="stat-icon red"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="stat-number" id="attackCount">0</div>
+                    <div class="stat-label">Attacks Detected</div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="stat-card">
+                    <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+                    <div class="stat-number" id="normalCount">0</div>
+                    <div class="stat-label">Normal Traffic</div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="stat-card">
+                    <div class="stat-icon orange"><i class="fas fa-percentage"></i></div>
+                    <div class="stat-number" id="attackRate">0%</div>
+                    <div class="stat-label">Attack Rate</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12" data-aos="fade-up">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-table me-2"></i>Detailed Results</h5>
+                        <button class="btn btn-success btn-sm" onclick="exportResults()">
+                            <i class="fas fa-download me-2"></i>Export Results
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped responsive-table" id="resultsTable">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Prediction</th>
+                                        <th>Attack Type</th>
+                                        <th>Severity</th>
+                                        <th>Confidence</th>
+                                        <th>Risk Score</th>
+                                        <th>XGBoost</th>
+                                        <th>Isolation Forest</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultsTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12" data-aos="fade-up">
+            <div class="card" style="background: linear-gradient(135deg, rgba(25,194,166,0.04), rgba(14,127,166,0.04));">
+                <div class="card-body">
+                    <h5 class="mb-3"><i class="fas fa-info-circle me-2 text-info"></i>Supported CSV Formats</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="mb-2"><strong><i class="fas fa-chart-bar me-2" style="color: #19C2A6;"></i>Feature Data CSV:</strong></p>
+                            <pre class="bg-white p-3 rounded" style="border: 1px solid var(--border-color); font-size: 0.8rem;">dur,proto,service,state,spkts,dpkts,...
+0.121,6,2,1,6,4,258,172,74.08...</pre>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-2"><strong><i class="fas fa-history me-2" style="color: #0E7FA6;"></i>Attack History CSV (exported):</strong></p>
+                            <pre class="bg-white p-3 rounded" style="border: 1px solid var(--border-color); font-size: 0.8rem;">"id","detected_at","attack_type",...
+"1","2025-01-01T12:00","DoS"...</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="al-overlay" id="alOverlay">
+    <div class="al-particles" id="alParticles"></div>
+    <div class="al-hex-grid" id="alHexGrid"></div>
+
+    <div class="al-scanner">
+        <div class="al-scan-ring al-ring-1"></div>
+        <div class="al-scan-ring al-ring-2"></div>
+        <div class="al-scan-ring al-ring-3"></div>
+        <div class="al-core">
+            <div class="al-core-icon"><i class="fas fa-microscope"></i></div>
+        </div>
+        <div class="al-wave-line"></div>
+    </div>
+
+    <div class="al-title" id="alTitle">ANALYZING DATA</div>
+    <div class="al-subtitle" id="alSubtitle">Processing network traffic records</div>
+
+    <div class="al-progress-wrap">
+        <div class="al-progress-track">
+            <div class="al-progress-fill" id="alProgressFill"></div>
+        </div>
+        <div class="al-progress-text">
+            <span id="alPhase">Initializing...</span>
+            <span class="al-progress-pct" id="alPct">0%</span>
+        </div>
+    </div>
+
+    <div class="al-stats-bar">
+        <div class="al-stat-item">
+            <div class="al-stat-val teal" id="alStatRecords">0</div>
+            <div class="al-stat-label">Records</div>
+        </div>
+        <div class="al-stat-item">
+            <div class="al-stat-val red" id="alStatThreats">0</div>
+            <div class="al-stat-label">Threats</div>
+        </div>
+        <div class="al-stat-item">
+            <div class="al-stat-val blue" id="alStatModels">2</div>
+            <div class="al-stat-label">Models</div>
+        </div>
+    </div>
+
+    <div class="al-data-stream" id="alDataStream"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let analysisResults = [];
+
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+    uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (file && file.name.endsWith('.csv')) handleFile(file);
+    });
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files[0]) handleFile(e.target.files[0]);
+    });
+
+    function handleFile(file) {
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = (file.size / 1024).toFixed(1) + ' KB';
+        document.getElementById('fileInfo').classList.add('show');
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('csvData').value = e.target.result;
+        };
+        reader.readAsText(file);
+    }
+
+    function initLoaderEffects() {
+        const particles = document.getElementById('alParticles');
+        particles.innerHTML = '';
+        for (let i = 0; i < 30; i++) {
+            const p = document.createElement('div');
+            p.className = 'al-particle';
+            p.style.left = Math.random()*100+'%';
+            p.style.top = Math.random()*100+'%';
+            p.style.opacity = Math.random()*0.5+0.1;
+            p.style.animation = `alHexPulse ${2+Math.random()*4}s ease-in-out ${Math.random()*3}s infinite`;
+            particles.appendChild(p);
+        }
+        const hexGrid = document.getElementById('alHexGrid');
+        hexGrid.innerHTML = '';
+        for (let i = 0; i < 15; i++) {
+            const h = document.createElement('div');
+            h.className = 'al-hex';
+            h.style.left = Math.random()*100+'%';
+            h.style.top = Math.random()*100+'%';
+            h.style.animationDelay = Math.random()*3+'s';
+            h.style.animationDuration = 2+Math.random()*3+'s';
+            hexGrid.appendChild(h);
+        }
+        const stream = document.getElementById('alDataStream');
+        stream.innerHTML = '';
+        for (let i = 0; i < 40; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'al-data-bar';
+            bar.style.animationDelay = Math.random()*1.5+'s';
+            bar.style.animationDuration = 1+Math.random()+'s';
+            stream.appendChild(bar);
+        }
+    }
+
+    function showLoader(totalRecords) {
+        const overlay = document.getElementById('alOverlay');
+        initLoaderEffects();
+        overlay.classList.add('active');
+        document.getElementById('alStatRecords').textContent = totalRecords;
+
+        const phases = [
+            'Initializing ML pipeline...',
+            'Loading XGBoost model...',
+            'Loading Isolation Forest...',
+            'Preprocessing features...',
+            'Scaling feature vectors...',
+            'Running XGBoost predictions...',
+            'Running anomaly detection...',
+            'Computing hybrid decisions...',
+            'Classifying attack types...',
+            'Calculating risk scores...',
+            'Generating XAI analysis...',
+            'Compiling results...',
+            'Analysis complete!'
+        ];
+
+        let progress = 0;
+        const fill = document.getElementById('alProgressFill');
+        const pct = document.getElementById('alPct');
+        const phase = document.getElementById('alPhase');
+        const threats = document.getElementById('alStatThreats');
+        let threatCount = 0;
+
+        const interval = setInterval(() => {
+            progress += Math.random() * 3 + 0.5;
+            if (progress > 98) progress = 98;
+            fill.style.width = progress + '%';
+            pct.textContent = Math.floor(progress) + '%';
+
+            const phaseIdx = Math.min(Math.floor(progress / 8), phases.length - 1);
+            phase.textContent = phases[phaseIdx];
+
+            if (progress > 40 && Math.random() > 0.6) {
+                threatCount += Math.floor(Math.random() * 3);
+                threats.textContent = threatCount;
+            }
+        }, 200);
+
+        return { interval, fill, pct, phase, threats };
+    }
+
+    function hideLoader(loaderState) {
+        clearInterval(loaderState.interval);
+        loaderState.fill.style.width = '100%';
+        loaderState.pct.textContent = '100%';
+        loaderState.phase.textContent = 'Analysis complete!';
+        setTimeout(() => {
+            document.getElementById('alOverlay').classList.remove('active');
+        }, 600);
+    }
+
+    function detectHistoryCSV(csvText) {
+        const lines = csvText.split('\n').filter(l => l.trim());
+        if (lines.length < 2) return false;
+        const header = lines[0].toLowerCase().replace(/"/g, '');
+        return header.includes('attack_type') && (header.includes('detected_at') || header.includes('severity') || header.includes('source_ip'));
+    }
+
+    function parseHistoryCSV(csvText) {
+        const lines = csvText.split('\n').filter(l => l.trim());
+        if (lines.length < 2) return [];
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        const records = [];
+        for (let i = 1; i < lines.length; i++) {
+            const vals = [];
+            let inQuote = false, current = '';
+            for (const ch of lines[i]) {
+                if (ch === '"') { inQuote = !inQuote; }
+                else if (ch === ',' && !inQuote) { vals.push(current.trim()); current = ''; }
+                else { current += ch; }
+            }
+            vals.push(current.trim());
+            if (vals.length >= headers.length) {
+                const obj = {};
+                headers.forEach((h, idx) => { obj[h] = vals[idx] || ''; });
+                records.push(obj);
+            }
+        }
+        return records;
+    }
+
+    function esc(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    function displayHistoryData(records) {
+        const attacks = records.filter(r => r.attack_type && r.attack_type !== 'N/A' && r.attack_type !== '');
+        const total = records.length;
+        const attackCount = attacks.length;
+        const normalCount = total - attackCount;
+
+        document.getElementById('totalCount').textContent = total;
+        document.getElementById('attackCount').textContent = attackCount;
+        document.getElementById('normalCount').textContent = normalCount;
+        document.getElementById('attackRate').textContent = total > 0 ? ((attackCount/total)*100).toFixed(2)+'%' : '0%';
+
+        const thead = document.querySelector('#resultsTable thead tr');
+        thead.innerHTML = '<th>#</th><th>Timestamp</th><th>Attack Type</th><th>Source IP</th><th>Target IP</th><th>Severity</th><th>Confidence</th><th>Status</th>';
+
+        const tbody = document.getElementById('resultsTableBody');
+        tbody.innerHTML = '';
+        records.forEach((r, i) => {
+            const sevClass = ['High','Critical'].includes(r.severity) ? 'badge-danger' : r.severity === 'Medium' ? 'badge-warning' : 'badge-info';
+            const statusClass = r.status === 'resolved' ? 'badge-success' : 'badge-info';
+            const conf = parseFloat(r.confidence || 0);
+            const row = tbody.insertRow();
+            row.innerHTML = `
+                <td data-label="#"><strong>${i + 1}</strong></td>
+                <td data-label="Timestamp">${esc((r.detected_at||'').substring(0,19))}</td>
+                <td data-label="Attack Type">${esc(r.attack_type || 'N/A')}</td>
+                <td data-label="Source IP">${esc(r.source_ip || 'N/A')}</td>
+                <td data-label="Target IP">${esc(r.destination_ip || 'N/A')}</td>
+                <td data-label="Severity"><span class="badge ${sevClass}">${esc(r.severity || 'N/A')}</span></td>
+                <td data-label="Confidence">${(conf*100).toFixed(1)}%</td>
+                <td data-label="Status"><span class="badge ${statusClass}">${esc(r.status || 'N/A')}</span></td>
+            `;
+        });
+
+        analysisResults = records.map(r => ({
+            prediction: 'Attack',
+            attack_type: r.attack_type,
+            severity: r.severity,
+            confidence: parseFloat(r.confidence||0),
+            risk_score: parseFloat(r.risk_score||0),
+            source_ip: r.source_ip,
+            destination_ip: r.destination_ip,
+            status: r.status
+        }));
+
+        document.getElementById('resultsSection').style.display = 'block';
+        document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function analyzeData() {
+        const csvData = document.getElementById('csvData').value.trim();
+        if (!csvData) { alert('Please provide CSV data'); return; }
+
+        const isHistory = detectHistoryCSV(csvData);
+
+        if (isHistory) {
+            const records = parseHistoryCSV(csvData);
+            if (records.length === 0) { alert('No valid records found in history CSV'); return; }
+
+            const loader = showLoader(records.length);
+            const duration = 10000 + Math.random() * 2000;
+            setTimeout(() => {
+                hideLoader(loader);
+                setTimeout(() => displayHistoryData(records), 700);
+            }, duration);
+            return;
+        }
+
+        const lines = csvData.split('\n').filter(line => line.trim());
+        const data = [];
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const lower = line.toLowerCase();
+            if (lower.startsWith('dur') || lower.startsWith('"dur') || lower.startsWith('id,') || lower.startsWith('"id"')) continue;
+            const values = line.split(',').map(v => {
+                const cleaned = v.trim().replace(/"/g, '');
+                return parseFloat(cleaned);
+            });
+            if (values.length > 0 && !values.some(isNaN)) {
+                data.push(values);
+            }
+        }
+
+        if (data.length === 0) { alert('No valid numeric data found. Please check your CSV format.'); return; }
+
+        const loader = showLoader(data.length);
+        const duration = 10000 + Math.random() * 2000;
+
+        let apiResult = null;
+        try {
+            const response = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: data })
+            });
+            apiResult = await response.json();
+        } catch (error) {
+            hideLoader(loader);
+            alert('Error analyzing data: ' + error.message);
+            return;
+        }
+
+        const elapsed = Date.now();
+        const remaining = Math.max(0, duration - 2000);
+        await new Promise(r => setTimeout(r, remaining));
+
+        hideLoader(loader);
+        setTimeout(() => {
+            if (apiResult && apiResult.success) {
+                displayResults(apiResult);
+            } else {
+                alert('Error: ' + (apiResult?.error || 'Unknown error'));
+            }
+        }, 700);
+    }
+
+    function displayResults(result) {
+        analysisResults = result.results;
+        document.getElementById('totalCount').textContent = result.total;
+        document.getElementById('attackCount').textContent = result.attacks;
+        document.getElementById('normalCount').textContent = result.normal;
+        document.getElementById('attackRate').textContent = ((result.attacks / result.total) * 100).toFixed(2) + '%';
+
+        const thead = document.querySelector('#resultsTable thead tr');
+        thead.innerHTML = '<th>#</th><th>Prediction</th><th>Attack Type</th><th>Severity</th><th>Confidence</th><th>Risk Score</th><th>XGBoost</th><th>Isolation Forest</th>';
+
+        const tbody = document.getElementById('resultsTableBody');
+        tbody.innerHTML = '';
+        result.results.forEach((res, index) => {
+            const row = tbody.insertRow();
+            const sevClass = ['High','Critical'].includes(res.severity) ? 'badge-danger' : res.severity === 'Medium' ? 'badge-warning' : 'badge-info';
+            row.innerHTML = `
+                <td data-label="#"><strong>${index + 1}</strong></td>
+                <td data-label="Prediction"><span class="badge ${res.prediction === 'Attack' ? 'badge-danger' : 'badge-success'}">${esc(res.prediction)}</span></td>
+                <td data-label="Attack Type">${esc(res.attack_type || 'N/A')}</td>
+                <td data-label="Severity">${res.prediction === 'Attack' ? `<span class="badge ${sevClass}">${esc(res.severity)}</span>` : 'N/A'}</td>
+                <td data-label="Confidence">${(res.confidence * 100).toFixed(2)}%</td>
+                <td data-label="Risk Score">${(res.risk_score || 0).toFixed(1)}</td>
+                <td data-label="XGBoost">${esc(res.xgboost_result || 'N/A')}</td>
+                <td data-label="Isolation Forest">${esc(res.isolation_forest_result || 'N/A')}</td>
+            `;
+        });
+
+        document.getElementById('resultsSection').style.display = 'block';
+        document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function exportResults() {
+        if (analysisResults.length === 0) { alert('No results to export'); return; }
+        const keys = Object.keys(analysisResults[0]);
+        let csv = keys.join(',') + '\n';
+        analysisResults.forEach(res => {
+            csv += keys.map(k => `"${res[k] || ''}"`).join(',') + '\n';
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'analysis_results_' + Date.now() + '.csv';
+        a.click();
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,396 @@
+{% extends 'dashboard_layout.html' %}
+
+{% block title %}Attack History{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4" data-aos="fade-up">
+        <div class="col-12">
+            <h2 class="fw-bold mb-2">
+                <i class="fas fa-history me-2" style="color: var(--primary-color);"></i>
+                Attack History
+            </h2>
+            <p class="text-muted">Complete historical record of all detected attacks and security incidents</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12" data-aos="fade-up">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filters</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Date Range</label>
+                            <select class="form-select" id="filterDateRange" style="border-radius: 10px;">
+                                <option value="all">All Time</option>
+                                <option value="24h">Last 24 Hours</option>
+                                <option value="7d">Last 7 Days</option>
+                                <option value="30d">Last 30 Days</option>
+                                <option value="90d">Last 90 Days</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Attack Type</label>
+                            <select class="form-select" id="filterAttackType" style="border-radius: 10px;">
+                                <option value="all">All Types</option>
+                                <option value="DoS">DoS</option>
+                                <option value="Exploits">Exploits</option>
+                                <option value="Generic">Generic</option>
+                                <option value="Reconnaissance">Reconnaissance</option>
+                                <option value="Fuzzers">Fuzzers</option>
+                                <option value="Backdoor">Backdoor</option>
+                                <option value="Shellcode">Shellcode</option>
+                                <option value="Worms">Worms</option>
+                                <option value="Analysis">Analysis</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Severity</label>
+                            <select class="form-select" id="filterSeverity" style="border-radius: 10px;">
+                                <option value="all">All Severities</option>
+                                <option value="Critical">Critical</option>
+                                <option value="High">High</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Low">Low</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Status</label>
+                            <select class="form-select" id="filterStatus" style="border-radius: 10px;">
+                                <option value="all">All Status</option>
+                                <option value="detected">Active</option>
+                                <option value="resolved">Resolved</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <button class="btn btn-primary px-4" onclick="applyFilters()">
+                            <i class="fas fa-search me-2"></i>Apply Filters
+                        </button>
+                        <button class="btn btn-secondary px-4" onclick="resetFilters()">
+                            <i class="fas fa-redo me-2"></i>Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="100">
+            <div class="stat-card">
+                <div class="stat-icon red">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <div class="stat-number" id="statTotal">{{ total_attacks }}</div>
+                <div class="stat-label">Total Attacks</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="200">
+            <div class="stat-card">
+                <div class="stat-icon orange">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="stat-number" id="statHigh">{{ high_severity }}</div>
+                <div class="stat-label">High/Critical</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="300">
+            <div class="stat-card">
+                <div class="stat-icon green">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-number" id="statResolved">{{ resolved_count }}</div>
+                <div class="stat-label">Resolved</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="400">
+            <div class="stat-card">
+                <div class="stat-icon blue">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-number" id="statLast24">{{ last24h }}</div>
+                <div class="stat-label">Last 24 Hours</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12" data-aos="fade-up">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-database me-2"></i>Attack Records</h5>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm" style="background: linear-gradient(135deg, #19C2A6, #0E7FA6); color: white;" onclick="exportPDF()">
+                            <i class="fas fa-file-pdf me-2"></i>Export PDF
+                        </button>
+                        <button class="btn btn-success btn-sm" onclick="exportData()">
+                            <i class="fas fa-file-export me-2"></i>Export CSV
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped responsive-table" id="attackTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Timestamp</th>
+                                    <th>Attack Type</th>
+                                    <th>Source IP</th>
+                                    <th>Target IP</th>
+                                    <th>Severity</th>
+                                    <th>Confidence</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attackTableBody">
+                                {% if attacks %}
+                                {% for attack in attacks %}
+                                <tr>
+                                    <td data-label="ID"><strong>#{{ attack.id }}</strong></td>
+                                    <td data-label="Timestamp">{{ attack.detected_at }}</td>
+                                    <td data-label="Attack Type">{{ attack.attack_type }}</td>
+                                    <td data-label="Source IP">{{ attack.source_ip }}</td>
+                                    <td data-label="Target IP">{{ attack.destination_ip }}</td>
+                                    <td data-label="Severity">
+                                        <span class="badge {% if attack.severity in ['High','Critical'] %}badge-danger{% elif attack.severity == 'Medium' %}badge-warning{% else %}badge-info{% endif %}">
+                                            {{ attack.severity }}
+                                        </span>
+                                    </td>
+                                    <td data-label="Confidence">{{ "%.1f"|format((attack.confidence or 0) * 100) }}%</td>
+                                    <td data-label="Status"><span class="badge {% if attack.status == 'resolved' %}badge-success{% else %}badge-info{% endif %}">{{ attack.status }}</span></td>
+                                    <td data-label="Actions">
+                                        {% if attack.status != 'resolved' %}
+                                        <button class="btn btn-success btn-sm" onclick="resolveAttack({{ attack.id }})">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="9" class="text-center text-muted">
+                                        <i class="fas fa-info-circle me-2"></i>No attack records found. Run predictions to detect attacks.
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script>
+if (!window.jspdf) {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+    document.head.appendChild(s);
+}
+</script>
+<script>
+    async function exportPDF() {
+        try {
+            const resp = await fetch('/api/export-history');
+            const historyData = await resp.json();
+            const logoResp = await fetch('/static/img/logo.png');
+            const logoBlob = await logoResp.blob();
+            const logoBase64 = await new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(logoBlob);
+            });
+
+            if (!window.jspdf) {
+                alert('PDF library is still loading. Please wait a moment and try again.');
+                return;
+            }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const W = 210, H = 297;
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+            doc.setFillColor(7, 47, 79);
+            doc.rect(0, 0, W, H, 'F');
+            doc.setFillColor(10, 79, 122);
+            doc.rect(0, 0, W, 5, 'F');
+            doc.setFillColor(25, 194, 166);
+            doc.rect(0, 5, W, 2, 'F');
+
+            const logoSize = 50, logoX = (W - logoSize) / 2, logoY = 40;
+            doc.setFillColor(255,255,255);
+            doc.circle(W/2, logoY + logoSize/2, logoSize/2 + 3, 'F');
+            doc.addImage(logoBase64, 'PNG', logoX, logoY, logoSize, logoSize);
+            doc.setDrawColor(25, 194, 166);
+            doc.setLineWidth(1.5);
+            doc.circle(W/2, logoY + logoSize/2, logoSize/2 + 5);
+            doc.setDrawColor(14, 127, 166);
+            doc.setLineWidth(0.5);
+            doc.circle(W/2, logoY + logoSize/2, logoSize/2 + 9);
+
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(28);
+            doc.setFont('helvetica', 'bold');
+            doc.text('CLOUDATK-ML', W/2, 110, { align: 'center' });
+            doc.setFontSize(12);
+            doc.setTextColor(25, 194, 166);
+            doc.text('CLOUD DEFENSE SYSTEM', W/2, 120, { align: 'center' });
+            doc.setDrawColor(25, 194, 166);
+            doc.setLineWidth(0.5);
+            doc.line(60, 128, 150, 128);
+            doc.setFontSize(18);
+            doc.setTextColor(255, 255, 255);
+            doc.text('ATTACK HISTORY REPORT', W/2, 142, { align: 'center' });
+            doc.setFontSize(10);
+            doc.setTextColor(160, 200, 220);
+            doc.text('Generated: ' + dateStr + ' at ' + timeStr, W/2, 155, { align: 'center' });
+
+            doc.setFillColor(25, 194, 166);
+            doc.rect(0, H - 30, W, 30, 'F');
+            doc.setFontSize(8);
+            doc.setTextColor(7, 47, 79);
+            doc.text('CloudAtk-ML | Detecting Attacks in Cloud Computing using Machine Learning', W/2, H - 18, { align: 'center' });
+
+            doc.addPage();
+            doc.setFillColor(250, 252, 255);
+            doc.rect(0, 0, W, H, 'F');
+            doc.setFillColor(7, 47, 79);
+            doc.rect(0, 0, W, 25, 'F');
+            doc.setFontSize(14);
+            doc.setTextColor(25, 194, 166);
+            doc.text('ATTACK LOG', 15, 16);
+
+            const attacks = historyData.data || [];
+            let y = 32;
+            doc.setFillColor(240, 245, 250);
+            doc.rect(15, y, W - 30, 7, 'F');
+            doc.setFontSize(6.5);
+            doc.setTextColor(71, 85, 105);
+            const cols = [17, 30, 65, 95, 125, 155, 180];
+            ['#','Timestamp','Attack Type','Source IP','Target IP','Severity','Status'].forEach((h, i) => {
+                doc.text(h, cols[i], y + 5);
+            });
+            y += 9;
+
+            attacks.forEach((a, i) => {
+                if (y > H - 20) {
+                    doc.addPage();
+                    doc.setFillColor(250, 252, 255);
+                    doc.rect(0, 0, W, H, 'F');
+                    y = 15;
+                }
+                if (i % 2 === 0) {
+                    doc.setFillColor(248, 250, 252);
+                    doc.rect(15, y - 3, W - 30, 7, 'F');
+                }
+                doc.setFontSize(6);
+                doc.setTextColor(51, 65, 85);
+                doc.text(String(a.id || i+1), cols[0], y + 1);
+                doc.text(String(a.detected_at || 'N/A').substring(0,19), cols[1], y + 1);
+                doc.text(a.attack_type || 'N/A', cols[2], y + 1);
+                doc.text(a.source_ip || 'N/A', cols[3], y + 1);
+                doc.text(a.destination_ip || 'N/A', cols[4], y + 1);
+                const sev = a.severity || 'N/A';
+                if (sev === 'Critical' || sev === 'High') doc.setTextColor(239,68,68);
+                else if (sev === 'Medium') doc.setTextColor(245,158,11);
+                else doc.setTextColor(59,130,246);
+                doc.text(sev, cols[5], y + 1);
+                doc.setTextColor(a.status === 'resolved' ? 16 : 239, a.status === 'resolved' ? 185 : 68, a.status === 'resolved' ? 129 : 68);
+                doc.text(a.status || 'N/A', cols[6], y + 1);
+                y += 7;
+            });
+
+            const pgCount = doc.internal.getNumberOfPages();
+            for (let p = 1; p <= pgCount; p++) {
+                doc.setPage(p);
+                doc.setFillColor(7, 47, 79);
+                doc.rect(0, H - 15, W, 15, 'F');
+                doc.setFontSize(7);
+                doc.setTextColor(100, 140, 170);
+                doc.text('CloudAtk-ML Security Report | Confidential', 15, H - 6);
+                doc.text('Page ' + p + ' of ' + pgCount, W - 15, H - 6, { align: 'right' });
+            }
+
+            doc.save('CloudAtk-ML_Attack_History_' + now.getTime() + '.pdf');
+        } catch(err) {
+            alert('Error generating PDF: ' + err.message);
+        }
+    }
+
+    function applyFilters() {
+        const params = new URLSearchParams({
+            date_range: document.getElementById('filterDateRange').value,
+            attack_type: document.getElementById('filterAttackType').value,
+            severity: document.getElementById('filterSeverity').value,
+            status: document.getElementById('filterStatus').value
+        });
+
+        fetch('/api/history?' + params.toString())
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('attackTableBody');
+                if (data.attacks.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No records match the filters</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.attacks.map(a => `
+                    <tr>
+                        <td data-label="ID"><strong>#${a.id}</strong></td>
+                        <td data-label="Timestamp">${a.detected_at}</td>
+                        <td data-label="Attack Type">${a.attack_type}</td>
+                        <td data-label="Source IP">${a.source_ip}</td>
+                        <td data-label="Target IP">${a.destination_ip}</td>
+                        <td data-label="Severity"><span class="badge ${['High','Critical'].includes(a.severity) ? 'badge-danger' : a.severity === 'Medium' ? 'badge-warning' : 'badge-info'}">${a.severity}</span></td>
+                        <td data-label="Confidence">${((a.confidence || 0) * 100).toFixed(1)}%</td>
+                        <td data-label="Status"><span class="badge ${a.status === 'resolved' ? 'badge-success' : 'badge-info'}">${a.status}</span></td>
+                        <td data-label="Actions">${a.status !== 'resolved' ? `<button class="btn btn-success btn-sm" onclick="resolveAttack(${a.id})"><i class="fas fa-check"></i></button>` : ''}</td>
+                    </tr>
+                `).join('');
+            });
+    }
+
+    function resetFilters() {
+        document.getElementById('filterDateRange').value = 'all';
+        document.getElementById('filterAttackType').value = 'all';
+        document.getElementById('filterSeverity').value = 'all';
+        document.getElementById('filterStatus').value = 'all';
+        location.reload();
+    }
+
+    function resolveAttack(id) {
+        fetch(`/api/attack-log/${id}/resolve`, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) location.reload();
+            });
+    }
+
+    function exportData() {
+        fetch('/api/export-history')
+            .then(r => r.json())
+            .then(data => {
+                if (data.data.length === 0) { alert('No data to export'); return; }
+                const headers = Object.keys(data.data[0]);
+                const csv = [headers.join(','), ...data.data.map(r => headers.map(h => `"${r[h] || ''}"`).join(','))].join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'attack_history.csv';
+                a.click();
+            });
+    }
+</script>
+{% endblock %}

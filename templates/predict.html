@@ -1,0 +1,623 @@
+{% extends 'dashboard_layout.html' %}
+
+{% block title %}Live Detection{% endblock %}
+
+{% block content %}
+
+<div class="hacker-loader-overlay" id="hackerLoader">
+    <div class="hex-grid"></div>
+    <div class="matrix-rain" id="matrixRain"></div>
+    <div class="scan-line"></div>
+    <div class="corner-bracket tl"></div>
+    <div class="corner-bracket tr"></div>
+    <div class="corner-bracket bl"></div>
+    <div class="corner-bracket br"></div>
+    <div class="data-stream left" id="dataStreamL"></div>
+    <div class="data-stream right" id="dataStreamR"></div>
+
+    <div class="hacker-icon-container">
+        <div class="hacker-ring hacker-ring-1"></div>
+        <div class="hacker-ring hacker-ring-2"></div>
+        <div class="hacker-ring hacker-ring-3"></div>
+        <svg class="hacker-skull" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g filter="url(#glow)">
+                <path d="M60 10C35 10 18 28 18 52C18 65 23 75 30 82V98C30 102 33 105 37 105H45L48 95H72L75 105H83C87 105 90 102 90 98V82C97 75 102 65 102 52C102 28 85 10 60 10Z" fill="rgba(7,47,79,0.8)" stroke="#19C2A6" stroke-width="2.5"/>
+                <rect x="38" y="42" rx="4" width="16" height="16" fill="#072F4F" stroke="#19C2A6" stroke-width="2">
+                    <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/>
+                </rect>
+                <circle cx="46" cy="50" r="4" fill="#19C2A6">
+                    <animate attributeName="r" values="4;2;4" dur="2s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="1;0.5;1" dur="2s" repeatCount="indefinite"/>
+                </circle>
+                <rect x="66" y="42" rx="4" width="16" height="16" fill="#072F4F" stroke="#19C2A6" stroke-width="2">
+                    <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite" begin="0.3s"/>
+                </rect>
+                <circle cx="74" cy="50" r="4" fill="#19C2A6">
+                    <animate attributeName="r" values="4;2;4" dur="2s" repeatCount="indefinite" begin="0.3s"/>
+                    <animate attributeName="opacity" values="1;0.5;1" dur="2s" repeatCount="indefinite" begin="0.3s"/>
+                </circle>
+                <path d="M50 72 L55 66 L60 72 L65 66 L70 72" stroke="#19C2A6" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <animate attributeName="opacity" values="0.6;1;0.6" dur="3s" repeatCount="indefinite"/>
+                </path>
+                <line x1="46" y1="30" x2="42" y2="22" stroke="#0E7FA6" stroke-width="1.5" opacity="0.5"/>
+                <line x1="74" y1="30" x2="78" y2="22" stroke="#0E7FA6" stroke-width="1.5" opacity="0.5"/>
+                <line x1="60" y1="28" x2="60" y2="18" stroke="#0E7FA6" stroke-width="1.5" opacity="0.5"/>
+                <circle cx="42" cy="22" r="2" fill="#19C2A6" opacity="0.5">
+                    <animate attributeName="opacity" values="0.5;1;0.5" dur="1.5s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="78" cy="22" r="2" fill="#19C2A6" opacity="0.5">
+                    <animate attributeName="opacity" values="0.5;1;0.5" dur="1.5s" repeatCount="indefinite" begin="0.5s"/>
+                </circle>
+                <circle cx="60" cy="18" r="2" fill="#19C2A6" opacity="0.5">
+                    <animate attributeName="opacity" values="0.5;1;0.5" dur="1.5s" repeatCount="indefinite" begin="1s"/>
+                </circle>
+                <rect x="35" y="86" width="50" height="8" rx="2" fill="rgba(25,194,166,0.1)" stroke="#0E7FA6" stroke-width="1"/>
+                <rect x="37" y="88" width="0" height="4" rx="1" fill="#19C2A6">
+                    <animate attributeName="width" values="0;46;0" dur="3s" repeatCount="indefinite"/>
+                </rect>
+            </g>
+            <defs>
+                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="3" result="glow"/>
+                    <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+            </defs>
+        </svg>
+    </div>
+
+    <div class="loader-title">ANALYZING TRAFFIC</div>
+    <div class="loader-status"><span id="loaderStatusText"></span><span class="cursor-blink"></span></div>
+    <div class="loader-progress-track"><div class="loader-progress-bar"></div></div>
+</div>
+
+<div class="container-fluid">
+    <div class="row mb-4" data-aos="fade-up">
+        <div class="col-12">
+            <h2 class="fw-bold mb-2">
+                <i class="fas fa-radar me-2" style="color: var(--primary-color);"></i>
+                Live Attack Detection
+            </h2>
+            <p class="text-muted">Enter network traffic features to detect potential security threats in real-time</p>
+        </div>
+    </div>
+
+    {% if result %}
+    <div class="row mb-4" data-aos="fade-up">
+        <div class="col-12">
+            <div class="card {% if result.prediction == 'Attack' %}border-danger{% else %}border-success{% endif %}"
+                style="border-width: 3px;">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-md-2 text-center">
+                            <div class="stat-icon {% if result.prediction == 'Attack' %}red{% else %}green{% endif %}"
+                                style="width: 80px; height: 80px; font-size: 2.5rem; margin: 0 auto;">
+                                <i class="fas {% if result.prediction == 'Attack' %}fa-exclamation-triangle{% else %}fa-check-circle{% endif %}"></i>
+                            </div>
+                        </div>
+                        <div class="col-md-10">
+                            <h3 class="mb-2 {% if result.prediction == 'Attack' %}text-danger{% else %}text-success{% endif %}">
+                                Prediction Result: <strong>{{ result.prediction }}</strong>
+                            </h3>
+                            <h5 class="mb-3">Confidence: <strong>{{ "%.2f"|format(result.confidence * 100) }}%</strong></h5>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <p class="mb-1"><i class="fas fa-brain me-2 text-primary"></i><strong>XGBoost:</strong> {{ result.xgboost_result or 'N/A' }}</p>
+                                </div>
+                                <div class="col-md-3">
+                                    <p class="mb-1"><i class="fas fa-project-diagram me-2 text-info"></i><strong>Isolation Forest:</strong> {{ result.isolation_forest_result or 'N/A' }}</p>
+                                </div>
+                                {% if result.prediction == 'Attack' %}
+                                <div class="col-md-3">
+                                    <p class="mb-1"><i class="fas fa-bug me-2 text-danger"></i><strong>Attack Type:</strong> {{ result.attack_type }}</p>
+                                </div>
+                                <div class="col-md-3">
+                                    <p class="mb-1"><i class="fas fa-exclamation-circle me-2 text-warning"></i><strong>Severity:</strong>
+                                        <span class="badge {% if result.severity == 'Critical' %}badge-danger{% elif result.severity == 'High' %}badge-danger{% elif result.severity == 'Medium' %}badge-warning{% else %}badge-info{% endif %}">{{ result.severity }}</span>
+                                    </p>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-md-3">
+                                    <p class="mb-1"><i class="fas fa-chart-bar me-2 text-secondary"></i><strong>Anomaly Score:</strong> {{ "%.4f"|format(result.anomaly_score) }}</p>
+                                </div>
+                                <div class="col-md-3">
+                                    <p class="mb-1"><i class="fas fa-shield-alt me-2 text-danger"></i><strong>Risk Score:</strong> {{ "%.1f"|format(result.risk_score) }}/100</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if result.top_features %}
+    <div class="row mb-4" data-aos="fade-up">
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Top Contributing Features (XAI Analysis)</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="shapChart" style="max-height: 300px;"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-route me-2"></i>Decision Path</h5>
+                </div>
+                <div class="card-body">
+                    <div class="decision-path">
+                        <div class="dp-step">
+                            <div class="dp-icon" style="background: #3b82f6;"><i class="fas fa-cog"></i></div>
+                            <div class="dp-text"><strong>Feature Scaling</strong><br><small class="text-muted">StandardScaler normalization</small></div>
+                        </div>
+                        <div class="dp-connector"></div>
+                        <div class="dp-step">
+                            <div class="dp-icon" style="background: #8b5cf6;"><i class="fas fa-brain"></i></div>
+                            <div class="dp-text"><strong>XGBoost</strong><br><small class="text-muted">{{ result.xgboost_result or 'N/A' }} ({{ "%.1f"|format(result.confidence * 100) }}%)</small></div>
+                        </div>
+                        <div class="dp-connector"></div>
+                        <div class="dp-step">
+                            <div class="dp-icon" style="background: #06b6d4;"><i class="fas fa-project-diagram"></i></div>
+                            <div class="dp-text"><strong>Isolation Forest</strong><br><small class="text-muted">{{ result.isolation_forest_result or 'N/A' }} ({{ "%.4f"|format(result.anomaly_score) }})</small></div>
+                        </div>
+                        <div class="dp-connector"></div>
+                        <div class="dp-step">
+                            <div class="dp-icon" style="background: {% if result.prediction == 'Attack' %}#ef4444{% else %}#10b981{% endif %};"><i class="fas fa-{% if result.prediction == 'Attack' %}exclamation-triangle{% else %}check-circle{% endif %}"></i></div>
+                            <div class="dp-text"><strong>{{ result.prediction }}</strong><br><small class="text-muted">Risk: {{ "%.1f"|format(result.risk_score) }}/100</small></div>
+                        </div>
+                        {% if result.prediction == 'Attack' %}
+                        <div class="dp-connector"></div>
+                        <div class="dp-step">
+                            <div class="dp-icon" style="background: #f59e0b;"><i class="fas fa-crosshairs"></i></div>
+                            <div class="dp-text"><strong>{{ result.attack_type }}</strong><br><small class="text-muted">Severity: {{ result.severity }}</small></div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {% if error %}
+    <div class="row mb-4" data-aos="fade-up">
+        <div class="col-12">
+            <div class="alert alert-danger border-0"
+                style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));">
+                <i class="fas fa-exclamation-circle me-2"></i>{{ error }}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row mb-4">
+        <div class="col-12" data-aos="fade-up">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h5 class="mb-0"><i class="fas fa-sliders-h me-2"></i>Network Traffic Features</h5>
+                    <div class="d-flex flex-wrap gap-1">
+                        <button class="btn btn-success btn-sm" onclick="fillSampleNormal()">
+                            <i class="fas fa-check-circle me-1"></i>Normal
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="fillSampleAttack()">
+                            <i class="fas fa-bug me-1"></i>Attack
+                        </button>
+                        <div class="dropdown d-inline-block">
+                            <button class="btn btn-warning btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                                <i class="fas fa-vial me-1"></i>Simulate Attack
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#" onclick="simulateAttackType('DoS')"><i class="fas fa-server me-2 text-danger"></i>DoS Attack</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="simulateAttackType('Exploits')"><i class="fas fa-unlock me-2 text-danger"></i>Exploits</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="simulateAttackType('Reconnaissance')"><i class="fas fa-eye me-2 text-info"></i>Reconnaissance</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="simulateAttackType('Backdoor')"><i class="fas fa-door-open me-2 text-danger"></i>Backdoor</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="simulateAttackType('Shellcode')"><i class="fas fa-terminal me-2 text-danger"></i>Shellcode</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="simulateAttackType('Fuzzers')"><i class="fas fa-random me-2 text-warning"></i>Fuzzers</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="simulateAttackType('Worms')"><i class="fas fa-virus me-2 text-danger"></i>Worms</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="simulateAttackType('Generic')"><i class="fas fa-shield-alt me-2 text-warning"></i>Generic</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="simulateAttackType('Analysis')"><i class="fas fa-search me-2 text-info"></i>Analysis</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('predict') }}" id="predictForm">
+                        {% if features %}
+                        <div class="row g-3">
+                            {% for i in range(features|length) %}
+                            <div class="col-md-4 col-lg-3">
+                                <label for="feature_{{ i }}" class="form-label small fw-bold">{{ features[i] }}</label>
+                                <input type="text" inputmode="decimal" id="feature_{{ i }}" name="feature_{{ i }}" value="0"
+                                    class="form-control feature-input" lang="en" dir="ltr" style="border-radius: 10px;">
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="row mt-4">
+                            <div class="col-12 text-center">
+                                <button type="submit" class="btn btn-primary btn-lg px-5 me-3">
+                                    <i class="fas fa-search me-2"></i>Analyze Traffic
+                                </button>
+                                <button type="reset" class="btn btn-secondary btn-lg px-5">
+                                    <i class="fas fa-redo me-2"></i>Reset Form
+                                </button>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-warning border-0"
+                            style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.1));">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            No features available. Please train the model first.
+                        </div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12" data-aos="fade-up">
+            <div class="card"
+                style="background: linear-gradient(135deg, rgba(108, 75, 245, 0.05), rgba(165, 21, 224, 0.05));">
+                <div class="card-body">
+                    <h5 class="mb-3"><i class="fas fa-info-circle me-2 text-info"></i>How to Use This Tool</h5>
+                    <ol class="mb-0">
+                        <li class="mb-2">Enter the network traffic feature values in the form above</li>
+                        <li class="mb-2">Click <strong>"Normal Sample"</strong> or <strong>"Attack Sample"</strong> to test with example values</li>
+                        <li class="mb-2">Click <strong>"Analyze Traffic"</strong> to detect potential attacks</li>
+                        <li>View the prediction result, confidence score, attack type, severity, risk score, and XAI analysis</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .decision-path { display: flex; flex-direction: column; gap: 0; }
+    .dp-step { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+    .dp-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.85rem; flex-shrink: 0; }
+    .dp-text { font-size: 0.85rem; line-height: 1.3; }
+    .dp-connector { width: 2px; height: 16px; background: #e2e8f0; margin-left: 17px; }
+
+    .hacker-loader-overlay {
+        position: fixed; inset: 0; z-index: 99999;
+        background: radial-gradient(ellipse at center, rgba(7,47,79,0.97) 0%, rgba(0,0,0,0.99) 100%);
+        display: none; align-items: center; justify-content: center; flex-direction: column;
+        overflow: hidden;
+    }
+    .hacker-loader-overlay.active { display: flex; }
+
+    .matrix-rain { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    .matrix-col {
+        position: absolute; top: -100%; font-family: 'Courier New', monospace;
+        font-size: 14px; color: rgba(25,194,166,0.25); writing-mode: vertical-rl;
+        animation: matrixFall linear infinite;
+        text-shadow: 0 0 8px rgba(25,194,166,0.4);
+    }
+    @keyframes matrixFall {
+        0% { transform: translateY(-100%); opacity: 1; }
+        100% { transform: translateY(calc(100vh + 100%)); opacity: 0; }
+    }
+
+    .hacker-icon-container {
+        position: relative; width: 180px; height: 180px;
+        display: flex; align-items: center; justify-content: center;
+        margin-bottom: 30px;
+    }
+
+    .hacker-ring {
+        position: absolute; inset: 0; border-radius: 50%;
+        border: 3px solid transparent;
+    }
+    .hacker-ring-1 {
+        border-top-color: #19C2A6; border-right-color: #19C2A6;
+        animation: ringRotate 1.8s linear infinite;
+        filter: drop-shadow(0 0 10px rgba(25,194,166,0.5));
+    }
+    .hacker-ring-2 {
+        inset: 12px; border-bottom-color: #0E7FA6; border-left-color: #0E7FA6;
+        animation: ringRotate 1.4s linear infinite reverse;
+        filter: drop-shadow(0 0 10px rgba(14,127,166,0.5));
+    }
+    .hacker-ring-3 {
+        inset: 24px; border-top-color: #0A4F7A; border-right-color: #0A4F7A;
+        animation: ringRotate 2.2s linear infinite;
+        filter: drop-shadow(0 0 8px rgba(10,79,122,0.5));
+    }
+    @keyframes ringRotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    .hacker-skull {
+        position: relative; z-index: 2;
+        width: 100px; height: 100px;
+        animation: skullPulse 2s ease-in-out infinite;
+    }
+    @keyframes skullPulse {
+        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 15px rgba(25,194,166,0.6)); }
+        50% { transform: scale(1.08); filter: drop-shadow(0 0 30px rgba(25,194,166,0.9)); }
+    }
+
+    .scan-line {
+        position: absolute; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, transparent, #19C2A6, transparent);
+        animation: scanMove 2s ease-in-out infinite;
+        opacity: 0.7; z-index: 3; pointer-events: none;
+        box-shadow: 0 0 20px rgba(25,194,166,0.5);
+    }
+    @keyframes scanMove {
+        0% { top: 0; } 50% { top: 100%; } 100% { top: 0; }
+    }
+
+    .loader-title {
+        font-family: 'Courier New', monospace; color: #19C2A6;
+        font-size: 1.4rem; font-weight: 700; letter-spacing: 3px;
+        text-transform: uppercase; margin-bottom: 12px;
+        text-shadow: 0 0 20px rgba(25,194,166,0.5), 0 0 40px rgba(25,194,166,0.3);
+        animation: titleGlow 2s ease-in-out infinite;
+    }
+    @keyframes titleGlow {
+        0%, 100% { text-shadow: 0 0 20px rgba(25,194,166,0.5); }
+        50% { text-shadow: 0 0 40px rgba(25,194,166,0.8), 0 0 80px rgba(25,194,166,0.4); }
+    }
+
+    .loader-status {
+        font-family: 'Courier New', monospace; color: rgba(255,255,255,0.7);
+        font-size: 0.85rem; margin-bottom: 25px; min-height: 20px;
+    }
+    .loader-status .cursor-blink {
+        display: inline-block; width: 8px; height: 15px;
+        background: #19C2A6; margin-left: 3px; vertical-align: middle;
+        animation: cursorBlink 0.7s step-end infinite;
+    }
+    @keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    .loader-progress-track {
+        width: 320px; max-width: 80vw; height: 6px;
+        background: rgba(255,255,255,0.08); border-radius: 3px;
+        overflow: hidden; position: relative;
+    }
+    .loader-progress-bar {
+        height: 100%; border-radius: 3px; width: 0%;
+        background: linear-gradient(90deg, #072F4F, #0E7FA6, #19C2A6);
+        box-shadow: 0 0 15px rgba(25,194,166,0.5);
+        animation: progressGrow 3.5s ease-in-out forwards;
+    }
+    @keyframes progressGrow {
+        0% { width: 0%; } 20% { width: 25%; } 40% { width: 45%; }
+        60% { width: 65%; } 80% { width: 85%; } 100% { width: 98%; }
+    }
+
+    .hex-grid {
+        position: absolute; inset: 0; pointer-events: none; overflow: hidden; opacity: 0.04;
+    }
+    .hex-grid::before {
+        content: '';
+        position: absolute; inset: -50%; width: 200%; height: 200%;
+        background-image:
+            linear-gradient(30deg, #19C2A6 12%, transparent 12.5%, transparent 87%, #19C2A6 87.5%, #19C2A6),
+            linear-gradient(150deg, #19C2A6 12%, transparent 12.5%, transparent 87%, #19C2A6 87.5%, #19C2A6),
+            linear-gradient(30deg, #19C2A6 12%, transparent 12.5%, transparent 87%, #19C2A6 87.5%, #19C2A6),
+            linear-gradient(150deg, #19C2A6 12%, transparent 12.5%, transparent 87%, #19C2A6 87.5%, #19C2A6);
+        background-size: 80px 140px;
+        background-position: 0 0, 0 0, 40px 70px, 40px 70px;
+        animation: hexDrift 20s linear infinite;
+    }
+    @keyframes hexDrift { 0% { transform: translateY(0); } 100% { transform: translateY(140px); } }
+
+    .corner-bracket {
+        position: absolute; width: 40px; height: 40px;
+        border-color: rgba(25,194,166,0.3); border-style: solid; border-width: 0;
+    }
+    .corner-bracket.tl { top: 30px; left: 30px; border-top-width: 2px; border-left-width: 2px; }
+    .corner-bracket.tr { top: 30px; right: 30px; border-top-width: 2px; border-right-width: 2px; }
+    .corner-bracket.bl { bottom: 30px; left: 30px; border-bottom-width: 2px; border-left-width: 2px; }
+    .corner-bracket.br { bottom: 30px; right: 30px; border-bottom-width: 2px; border-right-width: 2px; }
+
+    .data-stream {
+        position: absolute; font-family: 'Courier New', monospace;
+        font-size: 10px; color: rgba(25,194,166,0.15);
+        white-space: nowrap; pointer-events: none;
+    }
+    .data-stream.left { left: 15px; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; }
+    .data-stream.right { right: 15px; top: 50%; transform: translateY(-50%); writing-mode: vertical-rl; }
+
+    @media (max-width: 576px) {
+        .hacker-icon-container { width: 130px; height: 130px; }
+        .hacker-skull { width: 70px; height: 70px; }
+        .loader-title { font-size: 1rem; letter-spacing: 2px; }
+        .loader-progress-track { width: 250px; }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function initLoader() {
+        const rain = document.getElementById('matrixRain');
+        const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
+        for (let i = 0; i < 30; i++) {
+            const col = document.createElement('div');
+            col.className = 'matrix-col';
+            col.style.left = (Math.random() * 100) + '%';
+            col.style.animationDuration = (3 + Math.random() * 6) + 's';
+            col.style.animationDelay = (Math.random() * 5) + 's';
+            col.style.fontSize = (10 + Math.random() * 8) + 'px';
+            let txt = '';
+            for (let j = 0; j < 30; j++) txt += chars[Math.floor(Math.random() * chars.length)];
+            col.textContent = txt;
+            rain.appendChild(col);
+        }
+
+        const streamChars = '0123456789ABCDEF:./{}[]<>';
+        ['dataStreamL', 'dataStreamR'].forEach(id => {
+            const el = document.getElementById(id);
+            let txt = '';
+            for (let i = 0; i < 80; i++) txt += streamChars[Math.floor(Math.random() * streamChars.length)];
+            el.textContent = txt;
+        });
+
+        const statusMessages = [
+            'Initializing XGBoost classifier...',
+            'Loading Isolation Forest model...',
+            'Applying StandardScaler normalization...',
+            'Extracting 42 network features...',
+            'Running hybrid ML pipeline...',
+            'Computing anomaly detection scores...',
+            'Analyzing traffic patterns...',
+            'Generating SHAP explanations...',
+            'Calculating risk assessment...',
+            'Finalizing threat classification...'
+        ];
+
+        const form = document.getElementById('predictForm');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const overlay = document.getElementById('hackerLoader');
+                overlay.classList.add('active');
+
+                const statusEl = document.getElementById('loaderStatusText');
+                let msgIdx = 0;
+                function typeStatus() {
+                    if (msgIdx >= statusMessages.length) msgIdx = 0;
+                    const msg = statusMessages[msgIdx];
+                    let charIdx = 0;
+                    statusEl.textContent = '';
+                    function typeChar() {
+                        if (charIdx < msg.length) {
+                            statusEl.textContent += msg[charIdx];
+                            charIdx++;
+                            setTimeout(typeChar, 25);
+                        } else {
+                            msgIdx++;
+                            setTimeout(typeStatus, 800);
+                        }
+                    }
+                    typeChar();
+                }
+                typeStatus();
+
+                const minDuration = 8000 + Math.random() * 2000;
+                setTimeout(function() {
+                    form.removeEventListener('submit', arguments.callee);
+                    form.submit();
+                }, minDuration);
+            });
+        }
+    })();
+
+    function fillSampleNormal() {
+        const sampleData = [
+            0.649902, 113.0, 0.0, 2.0, 14.0, 38.0, 734.0, 42014.0, 78.473372, 62.0, 252.0,
+            8395.112305, 503571.3125, 2.0, 17.0, 49.915, 15.432865, 61.426934, 1387.77833,
+            255.0, 1417884146.0, 3077387971.0, 255.0, 0.0, 0.0, 0.0, 52.0, 1106.0, 0.0, 0.0,
+            43.0, 1.0, 1.0, 1.0, 1.0, 2.0, 0.0, 0.0, 0.0, 1.0, 6.0, 0.0
+        ];
+        fillForm(sampleData, 'Normal traffic sample loaded!');
+    }
+
+    function fillSampleAttack() {
+        const sampleData = [
+            0.000009, 20.0, 0.0, 3.0, 2.0, 0.0, 200.0, 0.0, 111111.1072, 254.0, 0.0,
+            88888888.0, 0.0, 0.0, 0.0, 0.009, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 100.0, 0.0, 0.0, 0.0, 4.0, 2.0, 1.0, 1.0, 1.0, 4.0, 0.0, 0.0,
+            0.0, 2.0, 4.0, 0.0
+        ];
+        fillForm(sampleData, 'Attack traffic sample loaded!');
+    }
+
+    async function simulateAttackType(type) {
+        try {
+            const res = await fetch('/api/attack-simulation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ attack_type: type, count: 1 })
+            });
+            const data = await res.json();
+            if (data.success && data.results.length > 0) {
+                const features = data.results[0].features;
+                fillForm(features, type + ' attack simulation loaded! Click "Analyze Traffic" to detect.');
+            }
+        } catch(e) {
+            console.error('Simulation error:', e);
+        }
+    }
+
+    function toWesternDigits(str) {
+        const arabicIndic = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        const extArabic   = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+        let result = String(str);
+        for (let i = 0; i < 10; i++) {
+            result = result.replace(new RegExp(arabicIndic[i], 'g'), String(i));
+            result = result.replace(new RegExp(extArabic[i], 'g'), String(i));
+        }
+        result = result.replace(/٫/g, '.').replace(/٬/g, '');
+        return result;
+    }
+
+    document.querySelectorAll('.feature-input').forEach(input => {
+        input.addEventListener('input', function() {
+            const western = toWesternDigits(this.value);
+            if (western !== this.value) {
+                const pos = this.selectionStart;
+                this.value = western;
+                this.setSelectionRange(pos, pos);
+            }
+        });
+    });
+
+    function fillForm(data, msg) {
+        const inputs = document.querySelectorAll('.feature-input');
+        inputs.forEach((input, index) => {
+            if (index < data.length) {
+                input.value = String(data[index]);
+            }
+        });
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-success border-0 mt-3';
+        alertDiv.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1))';
+        alertDiv.innerHTML = '<i class="fas fa-check-circle me-2"></i>' + msg;
+        const form = document.getElementById('predictForm');
+        form.insertBefore(alertDiv, form.firstChild);
+        setTimeout(() => alertDiv.remove(), 3000);
+    }
+
+    {% if result and result.top_features %}
+    const shapCtx = document.getElementById('shapChart').getContext('2d');
+    new Chart(shapCtx, {
+        type: 'bar',
+        data: {
+            labels: [{% for f in result.top_features %}'{{ f.feature }}'{% if not loop.last %},{% endif %}{% endfor %}],
+            datasets: [{
+                label: 'Feature Importance Score',
+                data: [{% for f in result.top_features %}{{ f.importance }}{% if not loop.last %},{% endif %}{% endfor %}],
+                backgroundColor: [
+                    '#19C2A6', '#0E7FA6', '#0A4F7A', '#072F4F', '#10b981',
+                    '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { beginAtZero: true, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+                y: { grid: { display: false } }
+            }
+        }
+    });
+    {% endif %}
+</script>
+{% endblock %}

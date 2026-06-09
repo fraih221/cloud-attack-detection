@@ -1,0 +1,52 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card p-5">
+                <h2 class="text-cyan mb-4">Security Analysis Engine</h2>
+                <form id="analysisForm">
+                    <div class="row">
+                        {% for feature in features %}
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label small text-secondary">{{ feature }}</label>
+                            <input type="number" step="any" name="{{ feature }}" class="form-control bg-dark text-light border-secondary" value="0">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <button type="submit" class="btn btn-cyan w-100 mt-4 py-3">Run AI Inspection</button>
+                </form>
+
+                <div id="resultArea" class="mt-5 d-none">
+                    <div class="alert" id="resultAlert">
+                        <h4 id="resultTitle"></h4>
+                        <p id="resultDetails"></p>
+                    </div>
+                    <a href="/xai_report" class="btn btn-outline-cyan">View SHAP Explanation</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('analysisForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData.entries());
+    
+    const response = await fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    const result = await response.json();
+    
+    document.getElementById('resultArea').classList.remove('d-none');
+    const alert = document.getElementById('resultAlert');
+    alert.className = 'alert ' + (result.prediction === 'Attack' ? 'alert-danger' : 'alert-success');
+    document.getElementById('resultTitle').innerText = 'Detection Result: ' + result.prediction;
+    document.getElementById('resultDetails').innerText = 'Anomaly Score: ' + result.anomaly_score.toFixed(4);
+};
+</script>
+{% endblock %}

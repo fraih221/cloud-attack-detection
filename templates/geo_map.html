@@ -1,0 +1,1032 @@
+{% extends 'dashboard_layout.html' %}
+
+{% block title %}Attack Map{% endblock %}
+
+{% block extra_css %}
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+    :root {
+        --neon-green: #19C2A6;
+        --neon-blue: #0E7FA6;
+        --deep-navy: #040d1a;
+        --danger-red: #ef4444;
+        --warn-amber: #f59e0b;
+    }
+
+    /* ── STAT CARDS ── */
+    .geo-stat-card {
+        background: linear-gradient(135deg, rgba(7,47,79,0.6), rgba(4,13,26,0.8));
+        border: 1px solid rgba(25,194,166,0.15);
+        border-radius: 14px;
+        padding: 1.4rem;
+        transition: all 0.3s;
+        position: relative;
+        overflow: hidden;
+    }
+    .geo-stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--neon-green), transparent);
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    .geo-stat-card:hover::before { opacity: 1; }
+    .geo-stat-card:hover { transform: translateY(-3px); border-color: rgba(25,194,166,0.35); }
+
+    /* ── WORLD MAP WRAPPER ── */
+    .world-map-wrap {
+        background: linear-gradient(145deg, #020810 0%, #040d1a 40%, #061525 100%);
+        border-radius: 16px;
+        position: relative;
+        overflow: hidden;
+        min-height: 540px;
+    }
+    .world-map-wrap::before {
+        content: '';
+        position: absolute; inset: 0; z-index: 0;
+        background:
+            radial-gradient(ellipse 100% 60% at 50% 50%, rgba(25,194,166,0.04) 0%, transparent 70%),
+            radial-gradient(circle at 20% 30%, rgba(14,127,166,0.06) 0%, transparent 40%),
+            radial-gradient(circle at 80% 70%, rgba(14,127,166,0.05) 0%, transparent 40%);
+    }
+
+    .wm-svg-container {
+        position: relative; width: 100%; height: 540px; z-index: 1;
+    }
+    .wm-svg-container svg { width: 100%; height: 100%; }
+
+    /* SVG elements */
+    .wm-grid-line { stroke: rgba(25,194,166,0.04); stroke-width: 0.5; }
+    .wm-continent {
+        fill: rgba(25,194,166,0.07);
+        stroke: rgba(25,194,166,0.18);
+        stroke-width: 0.5;
+        transition: fill 0.3s;
+    }
+    .wm-continent:hover { fill: rgba(25,194,166,0.14); }
+
+    .wm-attack-line {
+        fill: none; stroke-width: 1.5;
+        stroke-linecap: round;
+    }
+    .wm-source-dot { animation: wmPulse 2s ease-in-out infinite; }
+    @keyframes wmPulse { 0%,100%{r:4;opacity:1} 50%{r:6;opacity:0.7} }
+
+    .wm-source-ring {
+        fill: none; stroke-width: 1.5; opacity: 0;
+        animation: wmRingExpand 2.5s ease-out infinite;
+    }
+    @keyframes wmRingExpand { 0%{r:6;opacity:0.7} 100%{r:28;opacity:0} }
+
+    .wm-target-dot { animation: wmTargetPulse 3s ease-in-out infinite; }
+    @keyframes wmTargetPulse { 0%,100%{r:5;opacity:0.9} 50%{r:7;opacity:0.6} }
+
+    .wm-target-ring {
+        fill: none; stroke-width: 1; opacity: 0;
+        animation: wmTargetRing 3s ease-out infinite;
+    }
+    @keyframes wmTargetRing { 0%{r:8;opacity:0.6;stroke-width:2} 100%{r:32;opacity:0;stroke-width:0.5} }
+
+    /* HUD */
+    .wm-hud-top, .wm-hud-bottom {
+        position: absolute; left: 0; right: 0; z-index: 5;
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 14px 20px; pointer-events: none;
+    }
+    .wm-hud-top { top: 0; }
+    .wm-hud-bottom { bottom: 0; }
+
+    .wm-hud-badge {
+        background: rgba(4,13,26,0.75);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(25,194,166,0.18);
+        border-radius: 10px;
+        padding: 8px 14px; color: white;
+        display: flex; align-items: center;
+        gap: 10px; font-size: 0.72rem;
+        pointer-events: auto;
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+    .wm-live-dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #10b981; flex-shrink: 0;
+        box-shadow: 0 0 8px #10b981;
+        animation: livePulse 1.5s infinite;
+    }
+    @keyframes livePulse { 0%,100%{opacity:1;box-shadow:0 0 8px #10b981} 50%{opacity:0.5;box-shadow:0 0 3px #10b981} }
+
+    .wm-threat-count {
+        font-family: 'Share Tech Mono', monospace;
+        font-size: 1.2rem; font-weight: 700; color: #ef4444;
+        text-shadow: 0 0 12px rgba(239,68,68,0.5);
+    }
+    .wm-stat-mini { text-align: center; }
+    .wm-stat-mini-val {
+        font-family: 'Share Tech Mono', monospace;
+        font-size: 0.95rem; font-weight: 700; color: #19C2A6;
+        text-shadow: 0 0 8px rgba(25,194,166,0.4);
+    }
+    .wm-stat-mini-label { font-size: 0.55rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; }
+
+    /* Legend */
+    .wm-legend {
+        position: absolute; bottom: 56px; right: 20px; z-index: 5;
+        background: rgba(4,13,26,0.8); backdrop-filter: blur(12px);
+        border: 1px solid rgba(25,194,166,0.12); border-radius: 10px;
+        padding: 10px 14px;
+    }
+    .wm-legend-item {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 0.64rem; color: rgba(255,255,255,0.6); margin-bottom: 5px;
+        font-family: 'Rajdhani', sans-serif; font-weight: 600; letter-spacing: 0.5px;
+    }
+    .wm-legend-item:last-child { margin-bottom: 0; }
+    .wm-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Tooltip */
+    .wm-tooltip {
+        position: absolute; z-index: 10; pointer-events: none;
+        background: rgba(4,13,26,0.96); backdrop-filter: blur(12px);
+        border: 1px solid rgba(25,194,166,0.35); border-radius: 10px;
+        padding: 10px 14px; color: white; font-size: 0.75rem;
+        white-space: nowrap; opacity: 0; transition: opacity 0.2s;
+        box-shadow: 0 5px 30px rgba(0,0,0,0.6), 0 0 20px rgba(25,194,166,0.1);
+    }
+    .wm-tooltip.active { opacity: 1; }
+    .wm-tooltip-name { font-weight: 700; margin-bottom: 3px; font-family: 'Rajdhani', sans-serif; font-size: 0.85rem; }
+    .wm-tooltip-count { color: #ef4444; font-family: 'Share Tech Mono', monospace; }
+    .wm-tooltip-type { color: rgba(255,255,255,0.5); font-size: 0.65rem; margin-top: 2px; }
+
+    /* ── LIVE FEED PANEL ── */
+    .live-feed-wrap {
+        background: linear-gradient(135deg, rgba(4,13,26,0.95), rgba(7,47,79,0.4));
+        border: 1px solid rgba(25,194,166,0.12);
+        border-radius: 14px;
+        max-height: 540px;
+        overflow: hidden;
+        display: flex; flex-direction: column;
+    }
+    .live-feed-header {
+        padding: 14px 18px;
+        border-bottom: 1px solid rgba(25,194,166,0.1);
+        display: flex; align-items: center; justify-content: space-between;
+        flex-shrink: 0;
+    }
+    .live-feed-body {
+        overflow-y: auto;
+        flex: 1;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(25,194,166,0.2) transparent;
+    }
+    .live-feed-body::-webkit-scrollbar { width: 4px; }
+    .live-feed-body::-webkit-scrollbar-thumb { background: rgba(25,194,166,0.2); border-radius: 2px; }
+
+    .feed-item {
+        padding: 10px 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        display: flex; align-items: flex-start; gap: 10px;
+        animation: feedSlideIn 0.4s ease;
+        transition: background 0.2s;
+    }
+    .feed-item:hover { background: rgba(25,194,166,0.04); }
+    @keyframes feedSlideIn {
+        from { opacity: 0; transform: translateX(-10px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    .feed-dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        flex-shrink: 0; margin-top: 4px;
+    }
+    .feed-dot.critical { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+    .feed-dot.high { background: #f97316; box-shadow: 0 0 6px #f97316; }
+    .feed-dot.medium { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+    .feed-dot.low { background: #10b981; box-shadow: 0 0 6px #10b981; }
+
+    .feed-text { flex: 1; }
+    .feed-src { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; color: #ef4444; }
+    .feed-arrow { color: rgba(255,255,255,0.3); font-size: 0.65rem; margin: 0 4px; }
+    .feed-dest { font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; color: #19C2A6; }
+    .feed-type {
+        font-size: 0.65rem; color: rgba(255,255,255,0.5);
+        font-family: 'Rajdhani', sans-serif; font-weight: 600;
+    }
+    .feed-time { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; color: rgba(255,255,255,0.3); }
+    .feed-badge {
+        font-size: 0.58rem; padding: 2px 6px; border-radius: 4px;
+        font-family: 'Rajdhani', sans-serif; font-weight: 700;
+        letter-spacing: 0.5px; flex-shrink: 0; align-self: center;
+    }
+    .feed-badge.critical { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .feed-badge.high { background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3); }
+    .feed-badge.medium { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+    .feed-badge.low { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+
+    /* ── ATTACK TYPE RADAR ── */
+    .attack-type-grid {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+        padding: 14px;
+    }
+    .attack-type-cell {
+        background: rgba(7,47,79,0.3);
+        border: 1px solid rgba(25,194,166,0.1);
+        border-radius: 8px; padding: 10px 8px; text-align: center;
+        transition: all 0.3s; cursor: default;
+        position: relative; overflow: hidden;
+    }
+    .attack-type-cell:hover {
+        border-color: rgba(25,194,166,0.3);
+        background: rgba(25,194,166,0.06);
+    }
+    .attack-type-cell::before {
+        content: '';
+        position: absolute; bottom: 0; left: 0; right: 0;
+        height: 2px;
+    }
+    .attack-type-icon { font-size: 1.2rem; margin-bottom: 4px; }
+    .attack-type-name { font-size: 0.62rem; color: rgba(255,255,255,0.6); font-family: 'Rajdhani', sans-serif; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+    .attack-type-count { font-family: 'Share Tech Mono', monospace; font-size: 0.9rem; font-weight: 700; }
+
+    /* ── COUNTRY ROWS ── */
+    .country-row {
+        display: flex; align-items: center; gap: 12px;
+        padding: 0.8rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+        transition: all 0.25s ease; cursor: default;
+    }
+    .country-row:last-child { border-bottom: none; }
+    .country-row:hover { padding-left: 8px; background: rgba(25,194,166,0.03); border-radius: 6px; }
+    .country-flag {
+        width: 44px; height: 44px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; color: white; font-size: 0.72rem;
+        flex-shrink: 0; font-family: 'Share Tech Mono', monospace;
+    }
+    .attack-bar {
+        height: 6px; border-radius: 3px;
+        background: rgba(255,255,255,0.06); flex-grow: 1; overflow: hidden;
+    }
+    .attack-bar-fill {
+        height: 100%; border-radius: 3px; transition: width 1.5s ease;
+        position: relative;
+    }
+    .attack-bar-fill::after {
+        content: '';
+        position: absolute; right: 0; top: 0; bottom: 0; width: 4px;
+        background: white; opacity: 0.4; border-radius: 0 3px 3px 0;
+        animation: barPulse 2s ease-in-out infinite;
+    }
+    @keyframes barPulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+    /* ── THREAT INTENSITY METER ── */
+    .threat-meter {
+        background: rgba(4,13,26,0.8);
+        border: 1px solid rgba(25,194,166,0.12);
+        border-radius: 14px; padding: 16px;
+        margin-bottom: 16px;
+    }
+    .threat-meter-label {
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700; font-size: 0.7rem;
+        text-transform: uppercase; letter-spacing: 1.5px;
+        color: rgba(255,255,255,0.4); margin-bottom: 10px;
+    }
+    .threat-bars { display: flex; gap: 3px; align-items: flex-end; height: 40px; }
+    .threat-bar-seg {
+        flex: 1; border-radius: 2px;
+        transition: height 0.5s ease, opacity 0.3s;
+        min-height: 4px;
+    }
+
+    /* ── GLOBAL TICKER ── */
+    .global-ticker {
+        position: absolute;
+        bottom: 40px; left: 20px; right: 20px;
+        z-index: 5; pointer-events: none;
+        overflow: hidden; height: 24px;
+    }
+    .ticker-inner {
+        display: flex; gap: 40px;
+        animation: tickerScroll 30s linear infinite;
+        white-space: nowrap;
+    }
+    @keyframes tickerScroll { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+    .ticker-item {
+        font-family: 'Share Tech Mono', monospace;
+        font-size: 0.62rem; color: rgba(255,255,255,0.25);
+        flex-shrink: 0;
+    }
+    .ticker-item span { color: rgba(25,194,166,0.6); }
+
+    /* ── SCAN OVERLAY ── */
+    .scan-radar {
+        position: absolute;
+        top: 20px; left: 20px; width: 60px; height: 60px;
+        z-index: 4; pointer-events: none;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .wm-svg-container, .world-map-wrap { min-height: 360px; }
+        .wm-svg-container { height: 360px; }
+        .wm-legend { display: none; }
+        .wm-hud-badge { padding: 6px 10px; font-size: 0.62rem; }
+        .live-feed-wrap { max-height: 320px; }
+        .attack-type-grid { grid-template-columns: repeat(3,1fr); }
+    }
+    @media (max-width: 576px) {
+        .wm-svg-container { height: 270px; }
+        .world-map-wrap { min-height: 270px; }
+        .country-row { gap: 8px; padding: 0.6rem 0; }
+        .country-flag { width: 34px; height: 34px; font-size: 0.62rem; }
+        .global-ticker { display: none; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4" data-aos="fade-up">
+        <div class="col-12 d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <h2 class="fw-bold mb-1" style="font-family:'Rajdhani',sans-serif;letter-spacing:1px;">
+                    <i class="fas fa-globe-americas me-2" style="color:var(--primary-color);"></i>
+                    Global Threat Intelligence Map
+                </h2>
+                <p class="text-muted mb-0" style="font-size:0.85rem;">Live cyber attack origins &amp; real-time threat vectors across the globe</p>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:6px 12px;">
+                    <span style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:#ef4444;">
+                        <i class="fas fa-circle me-1" style="animation:livePulse 1.5s infinite;font-size:0.5rem;"></i>
+                        LIVE THREAT FEED
+                    </span>
+                </div>
+                <button id="soundToggle" onclick="toggleSound()" style="background:rgba(25,194,166,0.1);border:1px solid rgba(25,194,166,0.2);border-radius:8px;padding:6px 12px;color:rgba(255,255,255,0.6);font-size:0.7rem;cursor:pointer;" title="Toggle sound effects">
+                    <i class="fas fa-volume-mute" id="soundIcon"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="50">
+            <div class="stat-card">
+                <div class="stat-icon red"><i class="fas fa-crosshairs"></i></div>
+                <div class="stat-number" id="statTotalAttacks">{{ total_attacks }}</div>
+                <div class="stat-label">Total Attacks Detected</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="100">
+            <div class="stat-card">
+                <div class="stat-icon orange"><i class="fas fa-bolt"></i></div>
+                <div class="stat-number" id="statAttacks24h">{{ attacks_24h }}</div>
+                <div class="stat-label">Last 24 Hours</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="150">
+            <div class="stat-card">
+                <div class="stat-icon blue"><i class="fas fa-globe"></i></div>
+                <div class="stat-number">{{ geo_data|length }}</div>
+                <div class="stat-label">Source Countries</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="200">
+            <div class="stat-card">
+                <div class="stat-icon purple"><i class="fas fa-layer-group"></i></div>
+                <div class="stat-number" id="statAttacksPerMin">0</div>
+                <div class="stat-label">Attacks / Min (Live)</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAP + LIVE FEED -->
+    <div class="row g-4 mb-4">
+        <!-- Map -->
+        <div class="col-lg-8" data-aos="fade-up">
+            <div class="card p-0 overflow-hidden">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2" style="background:rgba(4,13,26,0.8);border-bottom:1px solid rgba(25,194,166,0.1);">
+                    <h5 class="mb-0" style="font-family:'Rajdhani',sans-serif;letter-spacing:0.5px;">
+                        <i class="fas fa-map-marked-alt me-2" style="color:#19C2A6;"></i>Live Attack Origins
+                    </h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <span id="attacksPerSecBadge" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:4px 10px;font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#ef4444;">0 att/s</span>
+                        <div class="wm-live-dot"></div>
+                        <small style="font-family:'Rajdhani',sans-serif;font-weight:600;color:rgba(255,255,255,0.7);">Live Monitoring</small>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="world-map-wrap" id="worldMapWrap">
+                        <!-- TOP HUD -->
+                        <div class="wm-hud-top">
+                            <div class="wm-hud-badge">
+                                <i class="fas fa-shield-virus" style="color:#19C2A6;"></i>
+                                <span>THREAT INTEL</span>
+                                <span class="wm-threat-count" id="wmThreatCount">{{ total_attacks }}</span>
+                            </div>
+                            <div class="wm-hud-badge" style="gap:18px;">
+                                <div class="wm-stat-mini">
+                                    <div class="wm-stat-mini-val" id="wmActiveLines">0</div>
+                                    <div class="wm-stat-mini-label">Active Vectors</div>
+                                </div>
+                                <div class="wm-stat-mini">
+                                    <div class="wm-stat-mini-val">{{ geo_data|length }}</div>
+                                    <div class="wm-stat-mini-label">Sources</div>
+                                </div>
+                                <div class="wm-stat-mini">
+                                    <div class="wm-stat-mini-val" id="wmBlockedCount">0</div>
+                                    <div class="wm-stat-mini-label">Blocked</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SVG MAP -->
+                        <div class="wm-svg-container" id="wmSvgContainer"></div>
+
+                        <!-- GLOBAL TICKER -->
+                        <div class="global-ticker" id="globalTicker">
+                            <div class="ticker-inner" id="tickerInner"></div>
+                        </div>
+
+                        <!-- LEGEND -->
+                        <div class="wm-legend">
+                            <div class="wm-legend-item"><div class="wm-legend-dot" style="background:#ef4444;box-shadow:0 0 6px #ef4444;"></div> Attack Source</div>
+                            <div class="wm-legend-item"><div class="wm-legend-dot" style="background:#f97316;box-shadow:0 0 6px #f97316;"></div> High Severity</div>
+                            <div class="wm-legend-item"><div class="wm-legend-dot" style="background:#19C2A6;box-shadow:0 0 6px #19C2A6;"></div> Cloud Target</div>
+                            <div class="wm-legend-item">
+                                <div style="width:24px;height:2px;border-top:2px dashed #f59e0b;flex-shrink:0;"></div>
+                                Active Vector
+                            </div>
+                        </div>
+
+                        <!-- BOTTOM HUD -->
+                        <div class="wm-hud-bottom">
+                            <div class="wm-hud-badge">
+                                <i class="fas fa-satellite-dish" style="color:#19C2A6;"></i>
+                                <span>{{ geo_data|length }} monitored regions • {{ targets|length }} protected targets</span>
+                            </div>
+                            <div class="wm-hud-badge">
+                                <div class="wm-live-dot"></div>
+                                <span id="wmTimestamp" style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;"></span>
+                            </div>
+                        </div>
+
+                        <!-- TOOLTIP -->
+                        <div class="wm-tooltip" id="wmTooltip">
+                            <div class="wm-tooltip-name" id="wmTTName"></div>
+                            <div class="wm-tooltip-count" id="wmTTCount"></div>
+                            <div class="wm-tooltip-type" id="wmTTType"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Attack Feed -->
+        <div class="col-lg-4" data-aos="fade-up" data-aos-delay="100">
+            <div class="live-feed-wrap h-100">
+                <div class="live-feed-header">
+                    <div>
+                        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.9rem;letter-spacing:1px;color:white;">
+                            <i class="fas fa-stream me-2" style="color:#19C2A6;"></i>LIVE ATTACK FEED
+                        </div>
+                        <div style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-top:2px;font-family:'Share Tech Mono',monospace;">
+                            Real-time threat vectors
+                        </div>
+                    </div>
+                    <div class="wm-live-dot"></div>
+                </div>
+                <div class="live-feed-body" id="liveFeedBody">
+                    <!-- JS fills this -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ATTACK TYPE DISTRIBUTION + COUNTRY SOURCES -->
+    <div class="row g-4 mb-4">
+        <!-- Attack Type Cells -->
+        <div class="col-lg-5" data-aos="fade-up">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-th me-2"></i>Attack Type Distribution</h5>
+                </div>
+                <div class="card-body p-2">
+                    <div class="attack-type-grid" id="attackTypeGrid">
+                        {% set attack_types = [
+                            ('DoS','fa-server','#ef4444',0),
+                            ('Exploits','fa-unlock-alt','#f97316',0),
+                            ('Recon','fa-eye','#f59e0b',0),
+                            ('Backdoor','fa-door-open','#a855f7',0),
+                            ('Shellcode','fa-terminal','#ec4899',0),
+                            ('Fuzzers','fa-random','#3b82f6',0),
+                            ('Worms','fa-virus','#10b981',0),
+                            ('Generic','fa-shield-alt','#06b6d4',0),
+                            ('Analysis','fa-search','#8b5cf6',0)
+                        ] %}
+                        {% for name, icon, color, _ in attack_types %}
+                        {% set count = attack_dist | selectattr('attack_type','equalto',name) | list %}
+                        <div class="attack-type-cell" style="border-color:{{ color }}22;">
+                            <div class="attack-type-cell" style="display:none;"></div>
+                            <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:{{ color }};opacity:0.5;border-radius:0 0 8px 8px;"></div>
+                            <div class="attack-type-icon" style="color:{{ color }};"><i class="fas {{ icon }}"></i></div>
+                            <div class="attack-type-count" style="color:{{ color }};">{{ count[0].count if count else 0 }}</div>
+                            <div class="attack-type-name">{{ name }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Country Sources -->
+        <div class="col-lg-7" data-aos="fade-up" data-aos-delay="100">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-list-ol me-2"></i>Top Attack Origins</h5>
+                </div>
+                <div class="card-body">
+                    {% set max_attacks = geo_data[0].attacks if geo_data else 1 %}
+                    {% for src in geo_data %}
+                    <div class="country-row">
+                        <div style="width:28px;text-align:center;font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:rgba(255,255,255,0.3);">{{ loop.index }}</div>
+                        <div class="country-flag" style="background:linear-gradient(135deg,{{ src.color }},{{ src.color }}88);">{{ src.code }}</div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <strong style="font-size:0.85rem;font-family:'Rajdhani',sans-serif;font-weight:700;">{{ src.country }}</strong>
+                                <span style="font-family:'Share Tech Mono',monospace;color:{{ src.color }};font-size:0.82rem;">{{ src.attacks }}</span>
+                            </div>
+                            <div class="attack-bar">
+                                <div class="attack-bar-fill" style="width:{{ (src.attacks/max_attacks*100) if max_attacks>0 else 0 }}%;background:linear-gradient(90deg,{{ src.color }}88,{{ src.color }});"></div>
+                            </div>
+                        </div>
+                        <div style="font-size:0.6rem;color:rgba(255,255,255,0.25);font-family:'Rajdhani',sans-serif;font-weight:600;min-width:40px;text-align:right;">
+                            {{ "%.0f"|format(src.attacks/max_attacks*100) }}%
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart Row -->
+    <div class="row g-4">
+        <div class="col-lg-5" data-aos="fade-up">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Attack Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="geoAttackChart" style="max-height:280px;"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7" data-aos="fade-up" data-aos-delay="100">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-area me-2"></i>Attack Frequency (Last 60s)</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="attackFreqChart" style="max-height:280px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+    const geoRaw = {{ geo_data | tojson }};
+    const targets = {{ targets | tojson }};
+    const W = 1000, H = 500;
+    const proj = (lat, lng) => [(lng + 180) / 360 * W, (90 - lat) / 180 * H];
+
+    /* ─ SOUND SYSTEM ─ */
+    let soundEnabled = false;
+    let audioCtx = null;
+    window.toggleSound = function() {
+        soundEnabled = !soundEnabled;
+        document.getElementById('soundIcon').className = soundEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute';
+        if (soundEnabled && !audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    };
+    function playAttackSound(severity) {
+        if (!soundEnabled || !audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        const freqs = { critical: 880, high: 660, medium: 440, low: 220 };
+        osc.frequency.setValueAtTime(freqs[severity] || 440, audioCtx.currentTime);
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + 0.15);
+    }
+
+    /* ─ SVG MAP ─ */
+    const container = document.getElementById('wmSvgContainer');
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+    // Defs
+    const defs = document.createElementNS(svgNS, 'defs');
+    function makeFilter(id, stdDev) {
+        const f = document.createElementNS(svgNS, 'filter');
+        f.setAttribute('id', id);
+        f.setAttribute('x','-100%'); f.setAttribute('y','-100%');
+        f.setAttribute('width','300%'); f.setAttribute('height','300%');
+        const gb = document.createElementNS(svgNS, 'feGaussianBlur');
+        gb.setAttribute('stdDeviation', stdDev); gb.setAttribute('result','glow');
+        const m = document.createElementNS(svgNS, 'feMerge');
+        ['glow','SourceGraphic'].forEach(n => {
+            const mn = document.createElementNS(svgNS, 'feMergeNode');
+            mn.setAttribute('in', n); m.appendChild(mn);
+        });
+        f.appendChild(gb); f.appendChild(m);
+        return f;
+    }
+    defs.appendChild(makeFilter('wmGlow', '3'));
+    defs.appendChild(makeFilter('wmDotGlow', '5'));
+    defs.appendChild(makeFilter('wmHeavyGlow', '8'));
+
+    // Gradient for ocean
+    const oceanGrad = document.createElementNS(svgNS, 'radialGradient');
+    oceanGrad.setAttribute('id','oceanGrad'); oceanGrad.setAttribute('cx','50%'); oceanGrad.setAttribute('cy','50%'); oceanGrad.setAttribute('r','70%');
+    const og1 = document.createElementNS(svgNS, 'stop'); og1.setAttribute('offset','0%'); og1.setAttribute('stop-color','rgba(14,127,166,0.06)');
+    const og2 = document.createElementNS(svgNS, 'stop'); og2.setAttribute('offset','100%'); og2.setAttribute('stop-color','rgba(4,13,26,0)');
+    oceanGrad.appendChild(og1); oceanGrad.appendChild(og2);
+    defs.appendChild(oceanGrad);
+    svg.appendChild(defs);
+
+    // Ocean overlay
+    const oceanRect = document.createElementNS(svgNS, 'rect');
+    oceanRect.setAttribute('width', W); oceanRect.setAttribute('height', H);
+    oceanRect.setAttribute('fill', 'url(#oceanGrad)');
+    svg.appendChild(oceanRect);
+
+    // Grid
+    const gridG = document.createElementNS(svgNS, 'g');
+    for (let i = 1; i < 10; i++) {
+        const hl = document.createElementNS(svgNS, 'line');
+        hl.setAttribute('x1',0); hl.setAttribute('y1',H/10*i); hl.setAttribute('x2',W); hl.setAttribute('y2',H/10*i);
+        hl.setAttribute('class','wm-grid-line'); gridG.appendChild(hl);
+    }
+    for (let i = 1; i < 18; i++) {
+        const vl = document.createElementNS(svgNS, 'line');
+        vl.setAttribute('x1',W/18*i); vl.setAttribute('y1',0); vl.setAttribute('x2',W/18*i); vl.setAttribute('y2',H);
+        vl.setAttribute('class','wm-grid-line'); gridG.appendChild(vl);
+    }
+    svg.appendChild(gridG);
+
+    // Continent paths
+    const continentPaths = [
+        "M250,110 L280,95 L310,90 L340,100 L360,105 L370,120 L350,145 L340,170 L320,200 L290,220 L270,235 L250,240 L230,230 L210,215 L200,195 L195,175 L200,155 L210,135 L220,120 Z",
+        "M140,140 L160,135 L180,130 L200,135 L210,145 L215,160 L210,175 L200,195 L185,210 L170,220 L155,218 L145,210 L138,195 L135,180 L130,165 L135,150 Z",
+        "M450,70 L470,65 L500,60 L530,55 L560,60 L580,70 L590,85 L585,100 L570,110 L555,115 L540,118 L520,120 L500,115 L485,108 L470,100 L460,90 L455,80 Z",
+        "M530,55 L560,50 L600,45 L650,50 L700,55 L740,60 L770,70 L790,80 L800,95 L795,110 L780,120 L760,128 L740,130 L720,128 L700,125 L680,120 L660,118 L640,120 L620,118 L600,115 L590,105 L580,95 L570,80 L550,65 Z",
+        "M600,115 L620,118 L640,120 L660,125 L680,135 L700,145 L710,160 L715,175 L710,190 L700,200 L688,205 L675,200 L665,190 L655,180 L645,170 L635,160 L625,150 L615,140 L608,130 L605,120 Z",
+        "M450,150 L480,135 L510,130 L540,128 L570,132 L590,140 L605,150 L615,165 L620,180 L615,195 L605,210 L588,220 L570,228 L548,230 L530,225 L515,218 L500,205 L488,195 L478,180 L470,168 L460,158 Z",
+        "M760,128 L780,132 L800,140 L815,155 L825,170 L830,190 L825,210 L815,228 L800,240 L785,248 L770,250 L760,245 L752,235 L748,220 L750,200 L755,180 L758,160 L755,145 Z",
+        "M340,270 L360,260 L380,255 L400,258 L415,265 L425,275 L430,290 L428,305 L420,318 L408,328 L395,332 L380,330 L368,325 L358,315 L350,300 L345,285 Z",
+        "M820,310 L845,300 L870,295 L900,300 L920,310 L930,325 L928,340 L920,355 L905,365 L885,370 L865,368 L848,360 L835,348 L825,335 L822,320 Z",
+        "M440,120 L460,115 L480,118 L495,125 L502,135 L500,148 L492,158 L480,162 L468,158 L455,150 L448,140 L442,130 Z"
+    ];
+
+    const contG = document.createElementNS(svgNS, 'g');
+    continentPaths.forEach(d => {
+        const p = document.createElementNS(svgNS, 'path');
+        p.setAttribute('d', d); p.setAttribute('class','wm-continent');
+        contG.appendChild(p);
+    });
+    svg.appendChild(contG);
+
+    const linesG = document.createElementNS(svgNS, 'g');
+    linesG.setAttribute('id','wmLines');
+    svg.appendChild(linesG);
+
+    const dotsG = document.createElementNS(svgNS, 'g');
+
+    // Draw targets
+    targets.forEach(t => {
+        const [tx,ty] = proj(t.lat, t.lng);
+        const ring = document.createElementNS(svgNS, 'circle');
+        ring.setAttribute('cx',tx); ring.setAttribute('cy',ty);
+        ring.setAttribute('r','8'); ring.setAttribute('class','wm-target-ring');
+        ring.setAttribute('stroke','#19C2A6');
+        ring.style.animationDelay = Math.random()*3+'s';
+        dotsG.appendChild(ring);
+        const dot = document.createElementNS(svgNS, 'circle');
+        dot.setAttribute('cx',tx); dot.setAttribute('cy',ty);
+        dot.setAttribute('r','5'); dot.setAttribute('class','wm-target-dot');
+        dot.setAttribute('fill','#19C2A6'); dot.setAttribute('filter','url(#wmDotGlow)');
+        dotsG.appendChild(dot);
+        const label = document.createElementNS(svgNS, 'text');
+        label.setAttribute('x',tx); label.setAttribute('y',ty-12);
+        label.setAttribute('text-anchor','middle');
+        label.setAttribute('fill','rgba(255,255,255,0.3)');
+        label.setAttribute('font-size','7');
+        label.setAttribute('font-family',"'Share Tech Mono',monospace");
+        label.textContent = t.name;
+        dotsG.appendChild(label);
+    });
+
+    // Draw sources
+    geoRaw.forEach(s => {
+        const [sx,sy] = proj(s.lat, s.lng);
+        for (let r = 0; r < 2; r++) {
+            const ring = document.createElementNS(svgNS, 'circle');
+            ring.setAttribute('cx',sx); ring.setAttribute('cy',sy);
+            ring.setAttribute('r','6'); ring.setAttribute('class','wm-source-ring');
+            ring.setAttribute('stroke', s.color);
+            ring.style.animationDelay = (Math.random()*2.5 + r*1.2)+'s';
+            dotsG.appendChild(ring);
+        }
+        const dot = document.createElementNS(svgNS, 'circle');
+        dot.setAttribute('cx',sx); dot.setAttribute('cy',sy);
+        dot.setAttribute('r','4'); dot.setAttribute('class','wm-source-dot');
+        dot.setAttribute('fill', s.color); dot.setAttribute('filter','url(#wmDotGlow)');
+        dot.style.cursor = 'pointer';
+        dotsG.appendChild(dot);
+
+        const attackTypes = ['DoS','Exploits','Recon','Backdoor','Shellcode'];
+        dot.addEventListener('mouseenter', (e) => {
+            const tt = document.getElementById('wmTooltip');
+            const wrap = document.getElementById('worldMapWrap');
+            const rect = wrap.getBoundingClientRect();
+            document.getElementById('wmTTName').textContent = s.country;
+            document.getElementById('wmTTCount').textContent = s.attacks + ' attacks detected';
+            document.getElementById('wmTTType').textContent = 'Primary: ' + attackTypes[Math.floor(Math.random()*attackTypes.length)];
+            tt.style.left = (e.clientX - rect.left + 15) + 'px';
+            tt.style.top = (e.clientY - rect.top - 10) + 'px';
+            tt.classList.add('active');
+        });
+        dot.addEventListener('mouseleave', () => document.getElementById('wmTooltip').classList.remove('active'));
+    });
+    svg.appendChild(dotsG);
+    container.appendChild(svg);
+
+    /* ─ ATTACK LINE ANIMATION ─ */
+    let activeLineCount = 0, blockedCount = 0;
+    const severities = ['critical','high','medium','low'];
+    const severityColors = { critical:'#ef4444', high:'#f97316', medium:'#f59e0b', low:'#3b82f6' };
+    const attackTypesArr = ['DoS','Exploits','Recon','Backdoor','Shellcode','Fuzzers','Worms','Generic'];
+
+    function createAttackLine(forceSeverity) {
+        const src = geoRaw[Math.floor(Math.random()*geoRaw.length)];
+        const tgt = targets[Math.floor(Math.random()*targets.length)];
+        const [sx,sy] = proj(src.lat, src.lng);
+        const [tx,ty] = proj(tgt.lat, tgt.lng);
+        const mx = (sx+tx)/2;
+        const my = Math.min(sy,ty) - 35 - Math.random()*60;
+        const d = `M${sx},${sy} Q${mx},${my} ${tx},${ty}`;
+
+        const sev = forceSeverity || severities[Math.floor(Math.random()*severities.length)];
+        const color = sev === 'critical' ? '#ef4444' : sev === 'high' ? '#f97316' : src.color;
+        const strokeW = sev === 'critical' ? 2.5 : sev === 'high' ? 2 : 1.5;
+
+        const line = document.createElementNS(svgNS, 'path');
+        line.setAttribute('d', d);
+        line.setAttribute('class','wm-attack-line');
+        line.setAttribute('stroke', color);
+        line.setAttribute('stroke-width', strokeW);
+        line.setAttribute('stroke-dasharray','8 4');
+        line.style.opacity = '0';
+        if (sev === 'critical') line.setAttribute('filter','url(#wmGlow)');
+        linesG.appendChild(line);
+
+        const len = line.getTotalLength();
+        line.setAttribute('stroke-dasharray', len);
+        line.setAttribute('stroke-dashoffset', len);
+        requestAnimationFrame(() => {
+            line.style.transition = 'stroke-dashoffset 1.6s ease-in-out, opacity 0.3s';
+            line.style.opacity = sev === 'critical' ? '0.95' : sev === 'high' ? '0.8' : '0.6';
+            line.setAttribute('stroke-dashoffset','0');
+        });
+
+        activeLineCount++;
+        document.getElementById('wmActiveLines').textContent = activeLineCount;
+
+        // Particle
+        const particle = document.createElementNS(svgNS, 'circle');
+        const pSize = sev === 'critical' ? 3.5 : 2.5;
+        particle.setAttribute('r', pSize);
+        particle.setAttribute('fill', color);
+        particle.setAttribute('filter','url(#wmDotGlow)');
+        linesG.appendChild(particle);
+
+        let progress = 0;
+        const speed = 0.01 + Math.random()*0.01;
+        function animateParticle() {
+            progress += speed;
+            if (progress > 1) {
+                // Impact explosion
+                const impactG = document.createElementNS(svgNS, 'g');
+                for (let r = 0; r < 3; r++) {
+                    const ir = document.createElementNS(svgNS, 'circle');
+                    ir.setAttribute('cx',tx); ir.setAttribute('cy',ty);
+                    ir.setAttribute('r','4');
+                    ir.setAttribute('fill','none');
+                    ir.setAttribute('stroke', color);
+                    ir.setAttribute('stroke-width', 3-r);
+                    ir.setAttribute('opacity','0.9');
+                    if (sev === 'critical') ir.setAttribute('filter','url(#wmHeavyGlow)');
+                    impactG.appendChild(ir);
+                    let impR = 4+r*3, impO = 0.9;
+                    function expandRing(ring, iR, iO) {
+                        function step() {
+                            iR += 1.2; iO -= 0.04;
+                            if (iO <= 0) { ring.remove(); return; }
+                            ring.setAttribute('r', iR);
+                            ring.setAttribute('opacity', iO);
+                            requestAnimationFrame(step);
+                        }
+                        setTimeout(step, r*80);
+                    }
+                    expandRing(ir, impR, impO);
+                }
+                linesG.appendChild(impactG);
+                setTimeout(() => impactG.remove(), 1200);
+                particle.remove();
+
+                // Add to live feed
+                addFeedItem(src, tgt, sev, attackTypesArr[Math.floor(Math.random()*attackTypesArr.length)]);
+                playAttackSound(sev);
+
+                // Random block
+                if (Math.random() > 0.4) {
+                    blockedCount++;
+                    document.getElementById('wmBlockedCount').textContent = blockedCount;
+                }
+                return;
+            }
+            const pt = line.getPointAtLength(progress * len);
+            particle.setAttribute('cx', pt.x);
+            particle.setAttribute('cy', pt.y);
+            requestAnimationFrame(animateParticle);
+        }
+        animateParticle();
+
+        const lifetime = 2000 + Math.random()*2000;
+        setTimeout(() => {
+            line.style.transition = 'opacity 0.8s';
+            line.style.opacity = '0';
+            setTimeout(() => {
+                line.remove();
+                activeLineCount = Math.max(0, activeLineCount-1);
+                document.getElementById('wmActiveLines').textContent = activeLineCount;
+            }, 800);
+        }, lifetime);
+    }
+
+    // Initial burst
+    for (let i = 0; i < 5; i++) setTimeout(() => createAttackLine(), i*500);
+
+    // Continuous with occasional critical burst
+    let baseInterval = 1800;
+    setInterval(() => {
+        const batch = 1 + Math.floor(Math.random()*3);
+        for (let i = 0; i < batch; i++) setTimeout(() => createAttackLine(), i*280);
+        // Occasional critical surge
+        if (Math.random() > 0.85) {
+            setTimeout(() => {
+                for (let i = 0; i < 3; i++) setTimeout(() => createAttackLine('critical'), i*200);
+            }, 1000);
+        }
+    }, baseInterval + Math.random()*1000);
+
+    /* ─ LIVE FEED ─ */
+    const feedItems = [];
+    const countries = geoRaw.map(g => g.country);
+    const IPs = () => Array(4).fill(0).map(()=>Math.floor(Math.random()*255)+1).join('.');
+
+    function addFeedItem(src, tgt, sev, type) {
+        const feed = document.getElementById('liveFeedBody');
+        const now = new Date();
+        const ts = now.toTimeString().slice(0,8);
+
+        const item = document.createElement('div');
+        item.className = 'feed-item';
+        item.innerHTML = `
+            <div class="feed-dot ${sev}"></div>
+            <div class="feed-text">
+                <div>
+                    <span class="feed-src">${IPs()}</span>
+                    <span class="feed-arrow">▶</span>
+                    <span class="feed-dest">${tgt.name}</span>
+                </div>
+                <div style="margin-top:2px;">
+                    <span class="feed-type">${type} · ${src.country}</span>
+                </div>
+                <div class="feed-time">${ts} UTC</div>
+            </div>
+            <span class="feed-badge ${sev}">${sev.toUpperCase()}</span>
+        `;
+        feed.insertBefore(item, feed.firstChild);
+        // Keep max 60 items
+        while (feed.children.length > 60) feed.removeChild(feed.lastChild);
+    }
+
+    // Pre-populate feed
+    for (let i = 0; i < 15; i++) {
+        const src = geoRaw[Math.floor(Math.random()*geoRaw.length)];
+        const tgt = targets[Math.floor(Math.random()*targets.length)];
+        addFeedItem(src, tgt, severities[Math.floor(Math.random()*4)], attackTypesArr[Math.floor(Math.random()*8)]);
+    }
+
+    /* ─ TICKER ─ */
+    const tickerMsgs = [
+        '⚠ DoS attack detected from CN', '⚠ Port scan from RU', '⚠ Exploit attempt on port 443',
+        '✓ Threat blocked: Shellcode injection', '⚠ Recon activity from KP',
+        '✓ Firewall rule triggered', '⚠ Brute force on SSH', '⚠ Zero-day exploit attempt',
+        '✓ IDS signature matched', '⚠ DNS amplification attack', '✓ Rate limit enforced',
+        '⚠ C2 callback detected', '✓ Malicious payload quarantined', '⚠ Data exfiltration attempt'
+    ];
+    const ticker = document.getElementById('tickerInner');
+    // Duplicate for seamless scroll
+    [...tickerMsgs, ...tickerMsgs].forEach(msg => {
+        const span = document.createElement('span');
+        span.className = 'ticker-item';
+        const isAlert = msg.startsWith('⚠');
+        span.innerHTML = `<span style="color:${isAlert?'rgba(239,68,68,0.5)':'rgba(25,194,166,0.5)'};">${msg.slice(0,1)}</span> ${msg.slice(2)}`;
+        ticker.appendChild(span);
+    });
+
+    /* ─ TIMESTAMP ─ */
+    function updateTimestamp() {
+        document.getElementById('wmTimestamp').textContent = new Date().toUTCString().replace('GMT','UTC');
+    }
+    updateTimestamp();
+    setInterval(updateTimestamp, 1000);
+
+    /* ─ COUNTERS ─ */
+    let threatBase = {{ total_attacks }};
+    let attacksThisMinute = 0;
+    let attacksPerSecHistory = Array(60).fill(0);
+    let secondCounter = 0;
+
+    setInterval(() => {
+        if (Math.random() > 0.4) {
+            const inc = Math.floor(Math.random()*4)+1;
+            threatBase += inc;
+            attacksThisMinute += inc;
+            secondCounter += inc;
+        }
+        document.getElementById('wmThreatCount').textContent = threatBase;
+        document.getElementById('statTotalAttacks').textContent = threatBase;
+    }, 2500);
+
+    setInterval(() => {
+        attacksPerSecHistory.shift();
+        attacksPerSecHistory.push(secondCounter);
+        document.getElementById('attacksPerSecBadge').textContent = secondCounter + ' att/s';
+        document.getElementById('statAttacksPerMin').textContent = attacksThisMinute;
+        document.getElementById('statAttacks24h').textContent = ({{ attacks_24h }} + Math.floor(attacksThisMinute/3));
+        attackFreqChart.data.datasets[0].data = [...attacksPerSecHistory];
+        attackFreqChart.update('none');
+        secondCounter = 0;
+        attacksThisMinute = 0;
+    }, 1000);
+
+    /* ─ CHARTS ─ */
+    new Chart(document.getElementById('geoAttackChart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: geoRaw.map(s => s.country),
+            datasets: [{ data: geoRaw.map(s => s.attacks), backgroundColor: geoRaw.map(s => s.color + 'cc'), borderWidth: 2, borderColor: geoRaw.map(s => s.color) }]
+        },
+        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position:'bottom', labels: { padding:10, font:{size:10}, color:'rgba(255,255,255,0.6)' } } }, cutout:'60%' }
+    });
+
+    const attackFreqChart = new Chart(document.getElementById('attackFreqChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: Array(60).fill('').map((_,i) => i % 10 === 0 ? `-${60-i}s` : ''),
+            datasets: [{
+                label: 'Attacks/s',
+                data: attacksPerSecHistory,
+                backgroundColor: attacksPerSecHistory.map(v => v > 5 ? 'rgba(239,68,68,0.7)' : 'rgba(25,194,166,0.5)'),
+                borderWidth: 0, borderRadius: 2
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 9 } } },
+                x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 9 } } }
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}

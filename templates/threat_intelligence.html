@@ -1,0 +1,638 @@
+{% extends 'dashboard_layout.html' %}
+
+{% block title %}Threat Intelligence{% endblock %}
+
+{% block extra_css %}
+<style>
+    .threat-gauge-container {
+        position: relative;
+        width: 220px;
+        height: 130px;
+        margin: 0 auto;
+    }
+    .threat-gauge-bg {
+        fill: none;
+        stroke: #e2e8f0;
+        stroke-width: 18;
+    }
+    .threat-gauge-fill {
+        fill: none;
+        stroke-width: 18;
+        stroke-linecap: round;
+        transition: stroke-dashoffset 1.5s ease-in-out, stroke 0.5s;
+    }
+    .threat-score-text {
+        font-size: 2.2rem;
+        font-weight: 800;
+        fill: var(--dark-color);
+    }
+    .threat-level-text {
+        font-size: 0.85rem;
+        font-weight: 600;
+        fill: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .recommendation-card {
+        border-left: 4px solid;
+        border-radius: 10px;
+        padding: 1.2rem;
+        margin-bottom: 1rem;
+        background: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        transition: all 0.3s;
+    }
+    .recommendation-card:hover {
+        transform: translateX(5px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .recommendation-card.priority-Critical { border-left-color: #ef4444; }
+    .recommendation-card.priority-High { border-left-color: #f97316; }
+    .recommendation-card.priority-Medium { border-left-color: #f59e0b; }
+    .recommendation-card.priority-Low { border-left-color: #10b981; }
+    .strategy-tag {
+        display: inline-block;
+        padding: 0.3rem 0.8rem;
+        margin: 0.2rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        background: rgba(25, 194, 166, 0.1);
+        color: var(--secondary-color);
+        border: 1px solid rgba(25, 194, 166, 0.2);
+    }
+    .attack-breakdown-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.8rem 1rem;
+        border-radius: 10px;
+        margin-bottom: 0.5rem;
+        background: #f8fafc;
+        transition: all 0.3s;
+    }
+    .attack-breakdown-item:hover {
+        background: #f1f5f9;
+        transform: translateX(3px);
+    }
+    .progress-thin {
+        height: 6px;
+        border-radius: 3px;
+        background: #e2e8f0;
+        overflow: hidden;
+        flex: 1;
+        margin: 0 1rem;
+    }
+    .progress-thin-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 1s ease-in-out;
+    }
+    .forecast-card {
+        text-align: center;
+        padding: 1rem;
+        border-radius: 10px;
+        background: #f8fafc;
+        transition: all 0.3s;
+    }
+    .forecast-card:hover {
+        background: #f1f5f9;
+        transform: translateY(-3px);
+    }
+    .pulse-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        animation: pulseDot 2s infinite;
+    }
+    @keyframes pulseDot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(1.3); }
+    }
+    .intel-metric {
+        text-align: center;
+        padding: 1.5rem;
+    }
+    .intel-metric-value {
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: var(--dark-color);
+    }
+    .intel-metric-label {
+        font-size: 0.8rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 0.3rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4" data-aos="fade-up">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="fw-bold mb-2">
+                    <i class="fas fa-satellite-dish me-2" style="color: var(--primary-color);"></i>
+                    Threat Intelligence Center
+                </h2>
+                <p class="text-muted">AI-powered threat analysis, risk forecasting, and security recommendations</p>
+            </div>
+            <div>
+                <button class="btn btn-primary" onclick="refreshIntelligence()">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh Intelligence
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-xl-4" data-aos="fade-up" data-aos-delay="100">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <span class="pulse-dot me-2" style="background: {{ threat_level.color }};"></span>
+                        Global Threat Level
+                    </h5>
+                </div>
+                <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                    <div class="threat-gauge-container">
+                        <svg viewBox="0 0 220 130" width="220" height="130">
+                            <path class="threat-gauge-bg" d="M 20 110 A 90 90 0 0 1 200 110" />
+                            <path class="threat-gauge-fill" id="gaugeArc" d="M 20 110 A 90 90 0 0 1 200 110"
+                                  stroke="{{ threat_level.color }}"
+                                  stroke-dasharray="283"
+                                  stroke-dashoffset="283" />
+                            <text x="110" y="95" text-anchor="middle" class="threat-score-text" id="gaugeScore">0</text>
+                            <text x="110" y="118" text-anchor="middle" class="threat-level-text">{{ threat_level.level }}</text>
+                        </svg>
+                    </div>
+                    <div class="row w-100 mt-3">
+                        <div class="col-6 text-center">
+                            <div class="fw-bold" style="color: var(--dark-color);">{{ threat_level.attacks_last_hour }}</div>
+                            <small class="text-muted">Attacks/Hour</small>
+                        </div>
+                        <div class="col-6 text-center">
+                            <div class="fw-bold" style="color: var(--dark-color);">{{ threat_level.avg_risk_24h }}</div>
+                            <small class="text-muted">Avg Risk (24h)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-8" data-aos="fade-up" data-aos-delay="200">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-area me-2"></i>Risk Forecast (Next 7 Days)</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="forecastChart" style="max-height: 250px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="100">
+            <div class="stat-card">
+                <div class="stat-icon red"><i class="fas fa-shield-virus"></i></div>
+                <div class="stat-number">{{ total_attacks }}</div>
+                <div class="stat-label">Total Threats</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="200">
+            <div class="stat-card">
+                <div class="stat-icon orange"><i class="fas fa-clock"></i></div>
+                <div class="stat-number">{{ attacks_24h }}</div>
+                <div class="stat-label">Last 24 Hours</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="300">
+            <div class="stat-card">
+                <div class="stat-icon blue"><i class="fas fa-network-wired"></i></div>
+                <div class="stat-number">{{ unique_sources }}</div>
+                <div class="stat-label">Unique Sources</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="400">
+            <div class="stat-card">
+                <div class="stat-icon purple"><i class="fas fa-exclamation-circle"></i></div>
+                <div class="stat-number">{{ unresolved }}</div>
+                <div class="stat-label">Unresolved</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6" data-aos="fade-up">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-crosshairs me-2"></i>Attack Type Breakdown</h5>
+                </div>
+                <div class="card-body">
+                    {% if attack_breakdown %}
+                    {% set max_count = attack_breakdown[0].cnt if attack_breakdown else 1 %}
+                    {% for ab in attack_breakdown %}
+                    <div class="attack-breakdown-item">
+                        <div style="min-width: 120px;">
+                            <strong>{{ ab.attack_type }}</strong>
+                            <br><small class="text-muted">Risk: {{ "%.1f"|format(ab.avg_risk or 0) }}</small>
+                        </div>
+                        <div class="progress-thin">
+                            <div class="progress-thin-fill"
+                                 style="width: {{ (ab.cnt / max_count * 100)|int }}%;
+                                        background: {% if severity_map.get(ab.attack_type) in ['Critical'] %}#ef4444{% elif severity_map.get(ab.attack_type) == 'High' %}#f97316{% elif severity_map.get(ab.attack_type) == 'Medium' %}#f59e0b{% else %}#10b981{% endif %};"></div>
+                        </div>
+                        <div style="min-width: 60px; text-align: right;">
+                            <span class="badge {% if severity_map.get(ab.attack_type) in ['Critical'] %}badge-danger{% elif severity_map.get(ab.attack_type) == 'High' %}badge-danger{% elif severity_map.get(ab.attack_type) == 'Medium' %}badge-warning{% else %}badge-info{% endif %}">
+                                {{ ab.cnt }}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-shield-alt fa-3x mb-3" style="color: #10b981;"></i>
+                        <p>No attacks recorded yet</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6" data-aos="fade-up" data-aos-delay="100">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-project-diagram me-2"></i>Attack Correlation Matrix</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="correlationChart" style="max-height: 300px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-12" data-aos="fade-up">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-lightbulb me-2"></i>AI Security Recommendations</h5>
+                    <span class="badge bg-primary">{{ recommendations|length }} Active</span>
+                </div>
+                <div class="card-body">
+                    {% for rec in recommendations %}
+                    <div class="recommendation-card priority-{{ rec.priority }}">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <h6 class="mb-1">
+                                    <i class="fas fa-{% if rec.priority == 'Critical' %}exclamation-triangle text-danger{% elif rec.priority == 'High' %}exclamation-circle text-warning{% else %}info-circle text-info{% endif %} me-2"></i>
+                                    {{ rec.attack_type }}
+                                </h6>
+                                <p class="text-muted mb-2 small">{{ rec.description }}</p>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge {% if rec.priority == 'Critical' %}badge-danger{% elif rec.priority == 'High' %}badge-warning{% else %}badge-info{% endif %}">{{ rec.priority }}</span>
+                                <br>
+                                <small class="text-muted">{{ rec.occurrences }} incidents</small>
+                            </div>
+                        </div>
+                        <div>
+                            {% for strategy in rec.strategies %}
+                            <span class="strategy-tag"><i class="fas fa-check-circle me-1"></i>{{ strategy }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6" data-aos="fade-up">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-fire me-2"></i>Attack Heatmap (7 Days x 24 Hours)</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="heatmapChart" style="max-height: 280px;"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6" data-aos="fade-up" data-aos-delay="100">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-vial me-2"></i>Attack Simulation Engine</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">Test the detection system by simulating different attack types</p>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-8">
+                            <select class="form-select" id="simAttackType" style="border-radius: 10px;">
+                                <option value="DoS">DoS Attack</option>
+                                <option value="Exploits">Exploits</option>
+                                <option value="Reconnaissance">Reconnaissance</option>
+                                <option value="Backdoor">Backdoor</option>
+                                <option value="Generic">Generic</option>
+                                <option value="Shellcode">Shellcode</option>
+                                <option value="Fuzzers">Fuzzers</option>
+                                <option value="Worms">Worms</option>
+                                <option value="Analysis">Analysis</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-danger w-100" onclick="runSimulation()">
+                                <i class="fas fa-play me-2"></i>Simulate
+                            </button>
+                        </div>
+                    </div>
+                    <div id="simResults" style="display: none;">
+                        <div class="row g-3">
+                            <div class="col-4">
+                                <div class="forecast-card">
+                                    <div class="fw-bold fs-4" id="simDetected" style="color: #10b981;">0</div>
+                                    <small class="text-muted">Detected</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="forecast-card">
+                                    <div class="fw-bold fs-4" id="simMissed" style="color: #ef4444;">0</div>
+                                    <small class="text-muted">Missed</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="forecast-card">
+                                    <div class="fw-bold fs-4" id="simRate" style="color: var(--secondary-color);">0%</div>
+                                    <small class="text-muted">Detection Rate</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3" id="simDetailsList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12" data-aos="fade-up">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-heartbeat me-2"></i>System Health Status</h5>
+                </div>
+                <div class="card-body" id="healthContainer">
+                    <div class="text-center py-3">
+                        <i class="fas fa-spinner fa-spin fa-2x" style="color: var(--primary-color);"></i>
+                        <p class="text-muted mt-2">Loading system health...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const threatScore = {{ threat_level.score }};
+    const maxDash = 283;
+    const targetOffset = maxDash - (threatScore / 100 * maxDash);
+    const gaugeArc = document.getElementById('gaugeArc');
+    const gaugeScoreEl = document.getElementById('gaugeScore');
+
+    setTimeout(() => {
+        gaugeArc.style.strokeDashoffset = targetOffset;
+        let current = 0;
+        const step = threatScore / 40;
+        const interval = setInterval(() => {
+            current += step;
+            if (current >= threatScore) {
+                current = threatScore;
+                clearInterval(interval);
+            }
+            gaugeScoreEl.textContent = Math.round(current);
+        }, 30);
+    }, 500);
+
+    const forecastLabels = [{% for f in forecast %}'{{ f.label }}'{% if not loop.last %},{% endif %}{% endfor %}];
+    const forecastRisk = [{% for f in forecast %}{{ f.predicted_risk }}{% if not loop.last %},{% endif %}{% endfor %}];
+    const forecastAttacks = [{% for f in forecast %}{{ f.predicted_attacks }}{% if not loop.last %},{% endif %}{% endfor %}];
+    const forecastConfidence = [{% for f in forecast %}{{ f.confidence }}{% if not loop.last %},{% endif %}{% endfor %}];
+
+    const fCtx = document.getElementById('forecastChart').getContext('2d');
+    new Chart(fCtx, {
+        type: 'line',
+        data: {
+            labels: forecastLabels,
+            datasets: [{
+                label: 'Predicted Risk Score',
+                data: forecastRisk,
+                borderColor: '#ef4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                tension: 0.4,
+                fill: true,
+                yAxisID: 'y'
+            }, {
+                label: 'Predicted Attacks',
+                data: forecastAttacks,
+                borderColor: '#0E7FA6',
+                backgroundColor: 'rgba(14, 127, 166, 0.1)',
+                tension: 0.4,
+                fill: true,
+                yAxisID: 'y1'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { position: 'bottom', labels: { padding: 15, font: { size: 11 } } } },
+            scales: {
+                y: { beginAtZero: true, position: 'left', title: { display: true, text: 'Risk Score' }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                y1: { beginAtZero: true, position: 'right', title: { display: true, text: 'Attacks' }, grid: { drawOnChartArea: false } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    fetch('/api/attack-correlation')
+        .then(r => r.json())
+        .then(data => {
+            const types = [...new Set(data.correlations.flatMap(c => [c.type1, c.type2]))].slice(0, 6);
+            const matrix = [];
+            types.forEach(t1 => {
+                const row = [];
+                types.forEach(t2 => {
+                    if (t1 === t2) { row.push(1.0); return; }
+                    const match = data.correlations.find(c =>
+                        (c.type1 === t1 && c.type2 === t2) || (c.type1 === t2 && c.type2 === t1));
+                    row.push(match ? match.strength : 0);
+                });
+                matrix.push(row);
+            });
+
+            const datasets = [];
+            types.forEach((t, i) => {
+                datasets.push({
+                    label: t,
+                    data: matrix[i],
+                    backgroundColor: [
+                        'rgba(25, 194, 166, 0.7)', 'rgba(14, 127, 166, 0.7)', 'rgba(10, 79, 122, 0.7)',
+                        'rgba(239, 68, 68, 0.7)', 'rgba(245, 158, 11, 0.7)', 'rgba(59, 130, 246, 0.7)'
+                    ][i] || 'rgba(100,100,100,0.5)',
+                    borderWidth: 0
+                });
+            });
+
+            new Chart(document.getElementById('correlationChart').getContext('2d'), {
+                type: 'bar',
+                data: { labels: types, datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } },
+                    scales: {
+                        x: { stacked: true, grid: { display: false } },
+                        y: { stacked: true, beginAtZero: true, max: 3, grid: { color: 'rgba(0,0,0,0.05)' }, title: { display: true, text: 'Correlation Strength' } }
+                    }
+                }
+            });
+        });
+
+    fetch('/api/attack-heatmap')
+        .then(r => r.json())
+        .then(data => {
+            const days = data.heatmap.map(h => h.day);
+            const hourLabels = Array.from({length: 24}, (_, i) => `${i}:00`);
+            const datasets = data.heatmap.map((dayData, idx) => ({
+                label: dayData.day,
+                data: dayData.hours,
+                backgroundColor: [
+                    'rgba(25, 194, 166, 0.8)', 'rgba(14, 127, 166, 0.8)', 'rgba(10, 79, 122, 0.8)',
+                    'rgba(7, 47, 79, 0.8)', 'rgba(239, 68, 68, 0.8)', 'rgba(245, 158, 11, 0.8)',
+                    'rgba(59, 130, 246, 0.8)'
+                ][idx],
+                borderWidth: 0
+            }));
+
+            new Chart(document.getElementById('heatmapChart').getContext('2d'), {
+                type: 'bar',
+                data: { labels: hourLabels.filter((_, i) => i % 3 === 0), datasets: datasets.map(d => ({...d, data: d.data.filter((_, i) => i % 3 === 0)})) },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } },
+                    scales: {
+                        x: { stacked: true, grid: { display: false } },
+                        y: { stacked: true, beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, title: { display: true, text: 'Attack Count' } }
+                    }
+                }
+            });
+        });
+
+    async function runSimulation() {
+        const type = document.getElementById('simAttackType').value;
+        const btn = event.target.closest('button');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Running...';
+
+        try {
+            const res = await fetch('/api/attack-simulation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ attack_type: type, count: 5 })
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('simResults').style.display = 'block';
+                document.getElementById('simDetected').textContent = data.detected;
+                document.getElementById('simMissed').textContent = data.missed;
+                document.getElementById('simRate').textContent = data.detection_rate + '%';
+
+                const list = document.getElementById('simDetailsList');
+                list.innerHTML = data.results.map((r, i) => `
+                    <div class="d-flex align-items-center justify-content-between p-2 mb-1" style="background: #f8fafc; border-radius: 8px;">
+                        <span><strong>#${i+1}</strong> ${type}</span>
+                        <span class="badge ${r.prediction === 'Attack' ? 'badge-danger' : 'badge-success'}">${r.prediction}</span>
+                        <span>${(r.confidence * 100).toFixed(1)}%</span>
+                    </div>
+                `).join('');
+            }
+        } catch(e) {
+            console.error(e);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-play me-2"></i>Simulate';
+        }
+    }
+
+    fetch('/api/system-health')
+        .then(r => r.json())
+        .then(data => {
+            const c = document.getElementById('healthContainer');
+            const statusColor = data.status === 'Operational' ? '#10b981' : '#f59e0b';
+            c.innerHTML = `
+                <div class="row g-3">
+                    <div class="col-md-2">
+                        <div class="intel-metric">
+                            <div class="intel-metric-value" style="color: ${statusColor};">
+                                <i class="fas fa-circle fa-xs me-1"></i>${data.status}
+                            </div>
+                            <div class="intel-metric-label">System Status</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="intel-metric">
+                            <div class="intel-metric-value">${data.total_predictions}</div>
+                            <div class="intel-metric-label">Total Predictions</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="intel-metric">
+                            <div class="intel-metric-value">${data.total_attacks}</div>
+                            <div class="intel-metric-label">Total Attacks</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="intel-metric">
+                            <div class="intel-metric-value">${data.features_count}</div>
+                            <div class="intel-metric-label">Features</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="intel-metric">
+                            <div class="intel-metric-value" style="color: ${data.all_models_loaded ? '#10b981' : '#ef4444'};">
+                                ${data.all_models_loaded ? 'All Loaded' : 'Partial'}
+                            </div>
+                            <div class="intel-metric-label">ML Models</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="intel-metric">
+                            <div class="intel-metric-value" style="color: #10b981;">${data.database}</div>
+                            <div class="intel-metric-label">Database</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="d-flex gap-3 justify-content-center flex-wrap">
+                            ${Object.entries(data.models).map(([k, v]) => `
+                                <span class="badge ${v ? 'bg-success' : 'bg-danger'} px-3 py-2">
+                                    <i class="fas fa-${v ? 'check' : 'times'} me-1"></i>${k}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+    function refreshIntelligence() {
+        location.reload();
+    }
+</script>
+{% endblock %}

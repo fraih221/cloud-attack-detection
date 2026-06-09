@@ -1,0 +1,651 @@
+{% extends 'dashboard_layout.html' %}
+
+{% block title %}Real-time Monitor{% endblock %}
+
+{% block extra_css %}
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+    /* ── SYSTEM STATUS ── */
+    .sys-status-bar {
+        background: linear-gradient(90deg, rgba(4,13,26,0.9), rgba(7,47,79,0.6));
+        border: 1px solid rgba(25,194,166,0.15);
+        border-radius: 12px; padding: 12px 20px;
+        display: flex; align-items: center; gap: 16px;
+        flex-wrap: wrap; margin-bottom: 20px;
+        font-family: 'Share Tech Mono', monospace; font-size: 0.7rem;
+    }
+    .sys-indicator {
+        display: flex; align-items: center; gap: 6px;
+        color: rgba(255,255,255,0.6);
+    }
+    .sys-dot {
+        width: 7px; height: 7px; border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .sys-dot.green { background: #10b981; box-shadow: 0 0 6px #10b981; animation: sysBlink 2s ease-in-out infinite; }
+    .sys-dot.red { background: #ef4444; box-shadow: 0 0 6px #ef4444; animation: sysBlink 1s ease-in-out infinite; }
+    .sys-dot.amber { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; animation: sysBlink 1.5s ease-in-out infinite; }
+    @keyframes sysBlink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .sys-val { color: #19C2A6; font-weight: 700; }
+
+    /* ── LIVE TRAFFIC CHART ── */
+    .traffic-chart-wrap {
+        position: relative;
+    }
+    .traffic-overlay-badge {
+        position: absolute; top: 10px; right: 10px; z-index: 5;
+        background: rgba(4,13,26,0.8); backdrop-filter: blur(8px);
+        border: 1px solid rgba(25,194,166,0.2);
+        border-radius: 8px; padding: 6px 12px;
+        font-family: 'Share Tech Mono', monospace; font-size: 0.65rem;
+        color: rgba(255,255,255,0.7);
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    /* ── THREAT ITEM ── */
+    .threat-item {
+        background: rgba(7,47,79,0.2);
+        border: 1px solid rgba(239,68,68,0.15);
+        border-left: 3px solid;
+        border-radius: 8px; padding: 12px 14px;
+        margin-bottom: 8px;
+        transition: all 0.3s;
+        animation: threatIn 0.4s ease;
+    }
+    @keyframes threatIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+    .threat-item:hover { background: rgba(7,47,79,0.4); transform: translateX(3px); }
+    .threat-item.critical { border-left-color: #ef4444; }
+    .threat-item.high { border-left-color: #f97316; }
+    .threat-item.medium { border-left-color: #f59e0b; }
+    .threat-item.low { border-left-color: #3b82f6; }
+
+    /* ── TIMELINE ── */
+    .timeline { position: relative; padding-left: 30px; }
+    .timeline-item { position: relative; padding-bottom: 18px; }
+    .timeline-item::before { content:''; position:absolute; left:-22px; top:8px; bottom:-12px; width:2px; background:rgba(25,194,166,0.1); }
+    .timeline-item:last-child::before { display:none; }
+    .timeline-marker { position:absolute; left:-26px; top:4px; width:10px; height:10px; border-radius:50%; border:2px solid rgba(4,13,26,1); }
+    .timeline-content { padding-left:10px; }
+
+    /* ── PACKET INSPECTOR ── */
+    .packet-inspector {
+        background: rgba(4,13,26,0.8);
+        border: 1px solid rgba(25,194,166,0.12);
+        border-radius: 12px; overflow: hidden;
+    }
+    .packet-header {
+        background: rgba(7,47,79,0.5);
+        padding: 10px 16px;
+        border-bottom: 1px solid rgba(25,194,166,0.1);
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700; font-size: 0.8rem;
+        letter-spacing: 1px; color: #19C2A6;
+        display: flex; align-items: center; justify-content: space-between;
+    }
+    .packet-body {
+        padding: 12px; max-height: 200px; overflow-y: auto;
+        scrollbar-width: thin; scrollbar-color: rgba(25,194,166,0.2) transparent;
+    }
+    .packet-body::-webkit-scrollbar { width: 3px; }
+    .packet-body::-webkit-scrollbar-thumb { background: rgba(25,194,166,0.2); }
+    .packet-row {
+        display: grid; grid-template-columns: 80px 100px 100px 80px auto;
+        gap: 8px; padding: 5px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        font-family: 'Share Tech Mono', monospace; font-size: 0.62rem;
+        align-items: center;
+        animation: packetIn 0.3s ease;
+    }
+    @keyframes packetIn { from{opacity:0;background:rgba(25,194,166,0.08)} to{opacity:1;background:transparent} }
+    .packet-row:last-child { border-bottom: none; }
+    .pkt-time { color: rgba(255,255,255,0.35); }
+    .pkt-src { color: #ef4444; }
+    .pkt-dst { color: #19C2A6; }
+    .pkt-proto { color: #f59e0b; font-size: 0.58rem; }
+    .pkt-flag { font-size: 0.55rem; padding: 2px 5px; border-radius: 3px; }
+    .pkt-flag.normal { background: rgba(16,185,129,0.15); color: #10b981; }
+    .pkt-flag.suspicious { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .pkt-flag.attack { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+    /* ── NETWORK TOPOLOGY ── */
+    .topology-canvas-wrap {
+        background: rgba(4,13,26,0.6);
+        border-radius: 10px; overflow: hidden;
+        position: relative;
+    }
+
+    /* ── KILL CHAIN ── */
+    .kill-chain-wrap {
+        display: flex; gap: 4px; align-items: stretch;
+        overflow-x: auto; padding-bottom: 4px;
+    }
+    .kill-chain-wrap::-webkit-scrollbar { height: 3px; }
+    .kill-chain-wrap::-webkit-scrollbar-thumb { background: rgba(25,194,166,0.2); }
+    .kc-step {
+        flex: 1; min-width: 80px;
+        background: rgba(7,47,79,0.3);
+        border: 1px solid rgba(25,194,166,0.1);
+        border-radius: 8px; padding: 10px 8px; text-align: center;
+        position: relative; transition: all 0.3s;
+    }
+    .kc-step.active { border-color: #f59e0b; background: rgba(245,158,11,0.08); }
+    .kc-step.complete { border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.06); }
+    .kc-step::after {
+        content: '▶'; position: absolute; right: -10px; top: 50%;
+        transform: translateY(-50%); font-size: 0.5rem;
+        color: rgba(25,194,166,0.3); z-index: 1;
+    }
+    .kc-step:last-child::after { display: none; }
+    .kc-icon { font-size: 1rem; margin-bottom: 4px; }
+    .kc-label { font-size: 0.58rem; font-family: 'Rajdhani', sans-serif; font-weight: 700; letter-spacing: 0.5px; color: rgba(255,255,255,0.5); text-transform: uppercase; line-height: 1.2; }
+    .kc-step.active .kc-label { color: #f59e0b; }
+    .kc-step.complete .kc-label { color: rgba(239,68,68,0.7); }
+
+    /* ── GAUGES ── */
+    .gauge-wrap {
+        display: flex; gap: 12px; flex-wrap: wrap;
+    }
+    .gauge-item {
+        flex: 1; min-width: 80px; text-align: center;
+        background: rgba(7,47,79,0.2);
+        border: 1px solid rgba(25,194,166,0.1);
+        border-radius: 10px; padding: 12px 8px;
+    }
+    .gauge-val {
+        font-family: 'Share Tech Mono', monospace;
+        font-size: 1.2rem; font-weight: 700;
+        line-height: 1;
+    }
+    .gauge-label { font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 4px; font-family: 'Rajdhani', sans-serif; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+    .gauge-mini-bar {
+        height: 3px; border-radius: 2px; margin-top: 6px;
+        background: rgba(255,255,255,0.08); overflow: hidden;
+    }
+    .gauge-mini-fill { height: 100%; border-radius: 2px; transition: width 1s ease; }
+
+    /* Animations */
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    @media (max-width:768px) {
+        .packet-row { grid-template-columns: 70px auto auto 60px; }
+        .packet-row .pkt-proto { display: none; }
+        .kill-chain-wrap { gap: 2px; }
+        .kc-step { min-width: 60px; padding: 8px 4px; }
+        .kc-icon { font-size: 0.8rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-3" data-aos="fade-up">
+        <div class="col-12">
+            <h2 class="fw-bold mb-1" style="font-family:'Rajdhani',sans-serif;letter-spacing:1px;">
+                <i class="fas fa-desktop me-2" style="color:var(--primary-color);"></i>
+                Real-time Network Monitor
+            </h2>
+            <p class="text-muted mb-0" style="font-size:0.85rem;">Live monitoring of network traffic, security threats &amp; system telemetry</p>
+        </div>
+    </div>
+
+    <!-- System Status Bar -->
+    <div class="sys-status-bar" data-aos="fade-up">
+        <div class="sys-indicator"><div class="sys-dot green"></div>IDS: <span class="sys-val ms-1">ACTIVE</span></div>
+        <div class="sys-indicator"><div class="sys-dot green"></div>Firewall: <span class="sys-val ms-1">RUNNING</span></div>
+        <div class="sys-indicator"><div class="sys-dot amber"></div>Threat Level: <span class="sys-val ms-1" id="sysThreadLevel" style="color:#f59e0b;">ELEVATED</span></div>
+        <div class="sys-indicator"><div class="sys-dot green"></div>ML Models: <span class="sys-val ms-1">LOADED</span></div>
+        <div class="sys-indicator">CPU: <span class="sys-val ms-1" id="sysCpu">--</span>%</div>
+        <div class="sys-indicator">MEM: <span class="sys-val ms-1" id="sysMem">--</span>%</div>
+        <div class="sys-indicator">PKT/s: <span class="sys-val ms-1" id="sysPkts">--</span></div>
+        <div class="sys-indicator" style="margin-left:auto;">
+            <span style="color:rgba(255,255,255,0.3);">UTC:</span>
+            <span class="sys-val ms-1" id="sysTime"></span>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="50">
+            <div class="stat-card">
+                <div class="stat-icon green"><i class="fas fa-signal"></i></div>
+                <div class="stat-number" id="systemStatus">Active</div>
+                <div class="stat-label">System Status</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="100">
+            <div class="stat-card">
+                <div class="stat-icon blue"><i class="fas fa-network-wired"></i></div>
+                <div class="stat-number" id="totalPredictions">{{ stats.total_predictions if stats else 0 }}</div>
+                <div class="stat-label">Total Analyzed</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="150">
+            <div class="stat-card">
+                <div class="stat-icon orange"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="stat-number" id="activeThreats">{{ active_threats|length }}</div>
+                <div class="stat-label">Active Threats</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6" data-aos="fade-up" data-aos-delay="200">
+            <div class="stat-card">
+                <div class="stat-icon purple"><i class="fas fa-tachometer-alt"></i></div>
+                <div class="stat-number" id="networkTraffic">--</div>
+                <div class="stat-label">Network Traffic</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LIVE TRAFFIC CHART -->
+    <div class="row mb-4">
+        <div class="col-12" data-aos="fade-up">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-chart-area me-2"></i>Live Traffic Analysis</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <div id="liveBps" style="font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:#19C2A6;">0 Mbps</div>
+                        <span class="badge bg-success me-1">
+                            <i class="fas fa-circle me-1" style="animation:pulse 2s infinite;font-size:0.5rem;"></i>Live
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body traffic-chart-wrap">
+                    <canvas id="liveTrafficChart" style="max-height:260px;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KILL CHAIN + GAUGES -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-8" data-aos="fade-up">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-link me-2"></i>Cyber Kill Chain — Current Threat Stage</h5>
+                </div>
+                <div class="card-body">
+                    <div class="kill-chain-wrap" id="killChain">
+                        <div class="kc-step complete" data-stage="recon">
+                            <div class="kc-icon" style="color:#8b5cf6;">🔍</div>
+                            <div class="kc-label">Recon</div>
+                        </div>
+                        <div class="kc-step complete" data-stage="weapon">
+                            <div class="kc-icon" style="color:#ec4899;">⚙️</div>
+                            <div class="kc-label">Weaponize</div>
+                        </div>
+                        <div class="kc-step active" data-stage="deliver">
+                            <div class="kc-icon" style="color:#f59e0b;">📡</div>
+                            <div class="kc-label">Delivery</div>
+                        </div>
+                        <div class="kc-step" data-stage="exploit">
+                            <div class="kc-icon" style="color:rgba(255,255,255,0.3);">💥</div>
+                            <div class="kc-label">Exploit</div>
+                        </div>
+                        <div class="kc-step" data-stage="install">
+                            <div class="kc-icon" style="color:rgba(255,255,255,0.3);">📦</div>
+                            <div class="kc-label">Install</div>
+                        </div>
+                        <div class="kc-step" data-stage="c2">
+                            <div class="kc-icon" style="color:rgba(255,255,255,0.3);">📶</div>
+                            <div class="kc-label">C2</div>
+                        </div>
+                        <div class="kc-step" data-stage="action">
+                            <div class="kc-icon" style="color:rgba(255,255,255,0.3);">🎯</div>
+                            <div class="kc-label">Actions</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:12px;padding:10px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
+                        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:#f59e0b;font-size:0.8rem;margin-bottom:4px;">
+                            <i class="fas fa-bolt me-2"></i>CURRENT STAGE: DELIVERY
+                        </div>
+                        <div style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:rgba(255,255,255,0.5);" id="killChainMsg">
+                            Suspicious payload delivery detected — monitoring inbound connections on port 443
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4" data-aos="fade-up" data-aos-delay="100">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-tachometer-alt me-2"></i>System Telemetry</h5>
+                </div>
+                <div class="card-body">
+                    <div class="gauge-wrap">
+                        <div class="gauge-item">
+                            <div class="gauge-val" style="color:#19C2A6;" id="gaugeCpu">0</div>
+                            <div class="gauge-label">CPU %</div>
+                            <div class="gauge-mini-bar"><div class="gauge-mini-fill" id="gaugeCpuBar" style="width:0%;background:#19C2A6;"></div></div>
+                        </div>
+                        <div class="gauge-item">
+                            <div class="gauge-val" style="color:#0E7FA6;" id="gaugeMem">0</div>
+                            <div class="gauge-label">MEM %</div>
+                            <div class="gauge-mini-bar"><div class="gauge-mini-fill" id="gaugeMemBar" style="width:0%;background:#0E7FA6;"></div></div>
+                        </div>
+                        <div class="gauge-item">
+                            <div class="gauge-val" style="color:#f59e0b;" id="gaugePkts">0</div>
+                            <div class="gauge-label">PKT/s</div>
+                            <div class="gauge-mini-bar"><div class="gauge-mini-fill" id="gaugePktsBar" style="width:0%;background:#f59e0b;"></div></div>
+                        </div>
+                        <div class="gauge-item">
+                            <div class="gauge-val" style="color:#ef4444;" id="gaugeDrops">0</div>
+                            <div class="gauge-label">DROPS</div>
+                            <div class="gauge-mini-bar"><div class="gauge-mini-fill" id="gaugeDropsBar" style="width:0%;background:#ef4444;"></div></div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:16px;">
+                        <div style="font-family:'Rajdhani',sans-serif;font-size:0.7rem;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Firewall Rules Triggered</div>
+                        <canvas id="firewallChart" style="max-height:120px;"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ACTIVE THREATS + PACKET INSPECTOR -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-5" data-aos="fade-up">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-shield-virus me-2"></i>Active Threats</h5>
+                </div>
+                <div class="card-body" id="threatsContainer">
+                    {% if active_threats %}
+                    {% for t in active_threats %}
+                    <div class="threat-item {{ t.severity|lower if t.severity else 'medium' }}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:0.9rem;" class="text-{% if t.severity in ['High','Critical'] %}danger{% elif t.severity == 'Medium' %}warning{% else %}info{% endif %}">
+                                    {{ t.attack_type }} Detected
+                                </div>
+                                <small class="text-muted" style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;">{{ t.source_ip }} → {{ t.destination_ip }}</small>
+                            </div>
+                            <span class="badge {% if t.severity in ['High','Critical'] %}badge-danger{% elif t.severity == 'Medium' %}badge-warning{% else %}badge-info{% endif %}">{{ t.severity }}</span>
+                        </div>
+                        <div style="margin-top:6px;font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:rgba(255,255,255,0.3);">
+                            <i class="fas fa-clock me-1"></i>{{ t.detected_at }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-shield-alt fa-3x mb-3" style="color:#10b981;"></i>
+                        <p class="text-muted mb-0">No active threats detected. System is secure.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7" data-aos="fade-up" data-aos-delay="100">
+            <div class="packet-inspector">
+                <div class="packet-header">
+                    <span><i class="fas fa-search me-2"></i>LIVE PACKET INSPECTOR</span>
+                    <div class="d-flex align-items-center gap-8">
+                        <span style="color:rgba(255,255,255,0.3);font-size:0.6rem;" id="packetCount">0 pkts captured</span>
+                        <span style="width:6px;height:6px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981;display:inline-block;margin-left:8px;animation:sysBlink 1.5s infinite;"></span>
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:80px 100px 100px 80px auto;gap:8px;padding:6px 12px;background:rgba(7,47,79,0.3);font-family:'Share Tech Mono',monospace;font-size:0.58rem;color:rgba(255,255,255,0.3);border-bottom:1px solid rgba(25,194,166,0.08);">
+                    <span>TIME</span><span>SRC IP</span><span>DST IP</span><span>PROTO</span><span>STATUS</span>
+                </div>
+                <div class="packet-body" id="packetBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RECENT ACTIVITY + CHARTS -->
+    <div class="row g-4">
+        <div class="col-lg-5" data-aos="fade-up">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-stream me-2"></i>Recent Activity</h5>
+                </div>
+                <div class="card-body" style="max-height:350px;overflow-y:auto;">
+                    <div class="timeline">
+                        {% if recent_activity %}
+                        {% for r in recent_activity %}
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-{% if r.prediction_result == 'Attack' %}danger{% else %}success{% endif %}"></div>
+                            <div class="timeline-content">
+                                <small class="text-muted" style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;">{{ r.prediction_time }}</small>
+                                <p class="mb-0" style="font-size:0.82rem;">{{ r.prediction_result }}{% if r.prediction_result == 'Attack' %} — {{ r.attack_type or 'Unknown' }} <span class="badge badge-{% if r.severity in ['High','Critical'] %}danger{% else %}warning{% endif %}" style="font-size:0.55rem;">{{ r.severity or 'N/A' }}</span>{% endif %}</p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <p class="text-muted text-center">No recent activity.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7" data-aos="fade-up" data-aos-delay="100">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Network Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <canvas id="protocolChart" style="max-height:200px;"></canvas>
+                        </div>
+                        <div class="col-md-6">
+                            <canvas id="trafficTypeChart" style="max-height:200px;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── LIVE TRAFFIC CHART ──
+const liveCtx = document.getElementById('liveTrafficChart').getContext('2d');
+const liveChart = new Chart(liveCtx, {
+    type: 'line',
+    data: {
+        labels: Array(30).fill('').map((_,i) => i % 5 === 0 ? `-${30-i}s` : ''),
+        datasets: [{
+            label: 'Normal Traffic (Mbps)',
+            data: Array(30).fill(0).map(() => 40 + Math.random()*60),
+            borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)',
+            tension: 0.4, fill: true, pointRadius: 0, borderWidth: 2
+        },{
+            label: 'Suspicious Traffic',
+            data: Array(30).fill(0).map(() => Math.random()*20),
+            borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.06)',
+            tension: 0.4, fill: true, pointRadius: 0, borderWidth: 1.5
+        },{
+            label: 'Attack Traffic',
+            data: Array(30).fill(0).map(() => Math.random()*12),
+            borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.06)',
+            tension: 0.4, fill: true, pointRadius: 0, borderWidth: 1.5
+        }]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: true, animation: false,
+        plugins: { legend: { position:'bottom', labels:{font:{size:10},color:'rgba(255,255,255,0.6)',padding:12} } },
+        scales: {
+            y: { beginAtZero: true, grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'rgba(255,255,255,0.4)',font:{size:9}} },
+            x: { grid:{display:false}, ticks:{color:'rgba(255,255,255,0.3)',font:{size:9}} }
+        }
+    }
+});
+
+// Update live chart
+let totalMbps = 0;
+setInterval(() => {
+    const normal = 40 + Math.random()*60 + (Math.random()>0.9 ? 80 : 0);
+    const suspicious = Math.random()*20;
+    const attack = Math.random()*12;
+    liveChart.data.datasets[0].data.shift(); liveChart.data.datasets[0].data.push(normal);
+    liveChart.data.datasets[1].data.shift(); liveChart.data.datasets[1].data.push(suspicious);
+    liveChart.data.datasets[2].data.shift(); liveChart.data.datasets[2].data.push(attack);
+    liveChart.update('none');
+    totalMbps = normal;
+    document.getElementById('liveBps').textContent = totalMbps.toFixed(1) + ' Mbps';
+}, 1000);
+
+// ── PROTOCOL CHART ──
+new Chart(document.getElementById('protocolChart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+        labels: ['TCP','UDP','ICMP','HTTP','HTTPS'],
+        datasets: [{ data:[45,25,10,12,8], backgroundColor:['#19C2A6','#0E7FA6','#0A4F7A','#f59e0b','#10b981'], borderWidth:0 }]
+    },
+    options: { responsive:true, maintainAspectRatio:true, cutout:'60%', plugins:{ legend:{position:'bottom',labels:{font:{size:10},color:'rgba(255,255,255,0.6)'}} } }
+});
+
+// ── TRAFFIC TYPE CHART ──
+const normalCount = {{ stats.total_normal_traffic if stats else 0 }};
+const attackCount = {{ stats.total_attacks_detected if stats else 0 }};
+new Chart(document.getElementById('trafficTypeChart').getContext('2d'), {
+    type: 'pie',
+    data: {
+        labels: ['Normal','Suspicious','Blocked'],
+        datasets: [{ data:[Math.max(normalCount,1),Math.max(Math.floor(attackCount*0.7),1),Math.max(Math.floor(attackCount*0.3),1)], backgroundColor:['#10b981','#f59e0b','#ef4444'], borderWidth:0 }]
+    },
+    options: { responsive:true, maintainAspectRatio:true, plugins:{ legend:{position:'bottom',labels:{font:{size:10},color:'rgba(255,255,255,0.6)'}} } }
+});
+
+// ── FIREWALL MINI CHART ──
+const fwData = Array(12).fill(0).map(()=>Math.floor(Math.random()*20)+2);
+const fwChart = new Chart(document.getElementById('firewallChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+        labels: Array(12).fill(''),
+        datasets: [{ data:fwData, backgroundColor:'rgba(25,194,166,0.5)', borderRadius:2, borderWidth:0 }]
+    },
+    options: {
+        responsive:true, maintainAspectRatio:true, animation:false,
+        plugins:{legend:{display:false}},
+        scales:{ y:{display:false,beginAtZero:true}, x:{display:false} }
+    }
+});
+setInterval(()=>{
+    fwChart.data.datasets[0].data.shift();
+    fwChart.data.datasets[0].data.push(Math.floor(Math.random()*20)+2);
+    fwChart.update('none');
+}, 2000);
+
+// ── SYSTEM TELEMETRY ──
+let cpu = 35, mem = 52, pkts = 1200, drops = 3;
+function updateTelemetry() {
+    cpu = Math.max(10,Math.min(95, cpu + (Math.random()*10-5)));
+    mem = Math.max(20,Math.min(90, mem + (Math.random()*4-2)));
+    pkts = Math.max(500,Math.min(9999, pkts + (Math.random()*200-100)));
+    drops = Math.max(0,Math.min(50, drops + Math.floor(Math.random()*3-1)));
+
+    const cpuStr = Math.round(cpu)+'';
+    document.getElementById('gaugeCpu').textContent = cpuStr;
+    document.getElementById('gaugeCpuBar').style.width = cpu+'%';
+    document.getElementById('sysCpu').textContent = cpuStr;
+    document.getElementById('gaugeCpuBar').style.background = cpu > 80 ? '#ef4444' : cpu > 60 ? '#f59e0b' : '#19C2A6';
+
+    document.getElementById('gaugeMem').textContent = Math.round(mem)+'';
+    document.getElementById('gaugeMemBar').style.width = mem+'%';
+    document.getElementById('sysMem').textContent = Math.round(mem)+'';
+
+    const pktsStr = pkts > 999 ? (pkts/1000).toFixed(1)+'k' : pkts+'';
+    document.getElementById('gaugePkts').textContent = pktsStr;
+    document.getElementById('gaugePktsBar').style.width = (pkts/9999*100)+'%';
+    document.getElementById('sysPkts').textContent = pktsStr;
+
+    document.getElementById('gaugeDrops').textContent = drops+'';
+    document.getElementById('gaugeDropsBar').style.width = (drops/50*100)+'%';
+
+    document.getElementById('networkTraffic').textContent = totalMbps.toFixed(1)+' Mbps';
+}
+updateTelemetry();
+setInterval(updateTelemetry, 1500);
+
+// ── PACKET INSPECTOR ──
+const protocols = ['TCP','UDP','ICMP','HTTP','HTTPS','DNS','SSH','FTP'];
+const ipPrefix = ['192.168','10.0','172.16','203.0','185.220','45.95','91.108'];
+const rand_ip = () => ipPrefix[Math.floor(Math.random()*ipPrefix.length)] + '.' + (Math.floor(Math.random()*255)+1) + '.' + (Math.floor(Math.random()*255)+1);
+const flags = ['normal','normal','normal','suspicious','attack'];
+
+let packetCount = 0;
+function addPacket() {
+    const body = document.getElementById('packetBody');
+    const flag = flags[Math.floor(Math.random()*flags.length)];
+    const row = document.createElement('div');
+    row.className = 'packet-row';
+    const now = new Date();
+    const ts = now.toTimeString().slice(0,8);
+    const proto = protocols[Math.floor(Math.random()*protocols.length)];
+    const srcIp = rand_ip();
+    const dstIp = rand_ip();
+    row.innerHTML = `
+        <span class="pkt-time">${ts}</span>
+        <span class="pkt-src">${srcIp}</span>
+        <span class="pkt-dst">${dstIp}</span>
+        <span class="pkt-proto">${proto}</span>
+        <span class="pkt-flag ${flag}">${flag.toUpperCase()}</span>
+    `;
+    body.insertBefore(row, body.firstChild);
+    while (body.children.length > 40) body.removeChild(body.lastChild);
+    packetCount++;
+    document.getElementById('packetCount').textContent = packetCount + ' pkts captured';
+}
+// Initial packets
+for (let i = 0; i < 15; i++) addPacket();
+setInterval(addPacket, 800 + Math.random()*600);
+
+// ── KILL CHAIN SIMULATION ──
+const kcStages = ['recon','weapon','deliver','exploit','install','c2','action'];
+const kcMsgs = [
+    'Port scanning and fingerprinting detected from external IP',
+    'Weaponized payload assembly detected in network traffic',
+    'Suspicious payload delivery detected — monitoring inbound connections on port 443',
+    'Exploit attempt blocked — CVE-2024-1234 signature matched',
+    'Malware installation attempt quarantined by IDS',
+    'C2 callback attempt blocked — known malicious domain',
+    'Lateral movement detected — containment initiated'
+];
+let currentStage = 2;
+setInterval(() => {
+    if (Math.random() > 0.7) {
+        currentStage = Math.min(currentStage + 1, kcStages.length - 1);
+        const steps = document.querySelectorAll('.kc-step');
+        steps.forEach((s, i) => {
+            s.classList.remove('active','complete');
+            if (i < currentStage) s.classList.add('complete');
+            else if (i === currentStage) s.classList.add('active');
+        });
+        document.getElementById('killChainMsg').textContent = kcMsgs[currentStage];
+    }
+}, 8000);
+
+// ── CLOCK ──
+setInterval(()=>{
+    document.getElementById('sysTime').textContent = new Date().toTimeString().slice(0,8);
+}, 1000);
+
+// ── API POLLING ──
+setInterval(()=>{
+    fetch('/api/monitor-data')
+        .then(r=>r.json())
+        .then(data=>{
+            document.getElementById('totalPredictions').textContent = data.total_predictions;
+            document.getElementById('activeThreats').textContent = data.active_threats;
+        })
+        .catch(()=>{});
+}, 5000);
+</script>
+{% endblock %}

@@ -1,0 +1,267 @@
+{% extends 'dashboard_layout.html' %}
+
+{% block title %}Attack Encyclopedia{% endblock %}
+
+{% block extra_css %}
+<style>
+    .attack-card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        transition: all 0.4s ease;
+        overflow: hidden;
+        cursor: pointer;
+        position: relative;
+    }
+    .attack-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 35px rgba(0,0,0,0.15);
+    }
+    .attack-card-top {
+        padding: 1.5rem;
+        position: relative;
+        overflow: hidden;
+    }
+    .attack-card-top::before {
+        content: '';
+        position: absolute;
+        top: -20px;
+        right: -20px;
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        opacity: 0.1;
+    }
+    .attack-icon-circle {
+        width: 60px;
+        height: 60px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        color: white;
+        flex-shrink: 0;
+    }
+    .risk-meter {
+        height: 6px;
+        border-radius: 3px;
+        background: #e2e8f0;
+        overflow: hidden;
+    }
+    .risk-meter-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 1s ease;
+    }
+    .attack-detail-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 2000;
+        background: rgba(7,47,79,0.6);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+    .attack-detail-modal.show {
+        display: flex;
+    }
+    .attack-detail-content {
+        background: white;
+        border-radius: 20px;
+        max-width: 700px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        animation: slideUp 0.3s ease;
+    }
+    @keyframes slideUp {
+        from { transform: translateY(30px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+    .detail-header {
+        padding: 2rem;
+        border-radius: 20px 20px 0 0;
+        color: white;
+        position: relative;
+    }
+    .detail-body {
+        padding: 2rem;
+    }
+    .indicator-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: 0.85rem;
+    }
+    .indicator-item:last-child { border-bottom: none; }
+    .indicator-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .prevention-item {
+        background: linear-gradient(135deg, rgba(25,194,166,0.06), rgba(14,127,166,0.06));
+        border-radius: 10px;
+        padding: 0.8rem 1rem;
+        margin-bottom: 8px;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .detected-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: rgba(255,255,255,0.2);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        padding: 4px 12px;
+        font-size: 0.75rem;
+        color: white;
+        font-weight: 600;
+    }
+    @media (max-width: 576px) {
+        .attack-card-top { padding: 1rem; }
+        .attack-icon-circle { width: 45px; height: 45px; font-size: 1.1rem; border-radius: 12px; }
+        .attack-detail-content { border-radius: 16px; }
+        .detail-header { padding: 1.5rem; border-radius: 16px 16px 0 0; }
+        .detail-body { padding: 1.2rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4" data-aos="fade-up">
+        <div class="col-12">
+            <h2 class="fw-bold mb-2">
+                <i class="fas fa-book-open me-2" style="color: var(--primary-color);"></i>
+                Attack Encyclopedia
+            </h2>
+            <p class="text-muted">Comprehensive guide to all 9 attack categories detected by our ML models</p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        {% for atype, info in encyclopedia.items() %}
+        <div class="col-xl-4 col-md-6" data-aos="fade-up" data-aos-delay="{{ loop.index0 * 50 }}">
+            <div class="attack-card" onclick="showAttackDetail('{{ atype }}')">
+                <div class="attack-card-top" style="background: linear-gradient(135deg, {{ info.color }}15, {{ info.color }}08);">
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <div class="attack-icon-circle" style="background: {{ info.color }};">
+                            <i class="fas {{ info.icon }}"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h5 class="mb-1 fw-bold" style="color: var(--dark-color);">{{ atype }}</h5>
+                            <small class="text-muted">{{ info.full_name }}</small>
+                        </div>
+                    </div>
+                    <p class="text-muted mb-3" style="font-size: 0.85rem; line-height: 1.5;">{{ info.description[:120] }}...</p>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="fw-bold" style="color: {{ info.color }};">Risk Level: {{ info.risk_level }}%</small>
+                        <span class="badge {% if info.severity == 'Critical' %}badge-danger{% elif info.severity == 'High' %}badge-danger{% elif info.severity == 'Medium' %}badge-warning{% else %}badge-info{% endif %}">
+                            {{ info.severity }}
+                        </span>
+                    </div>
+                    <div class="risk-meter">
+                        <div class="risk-meter-fill" style="width: {{ info.risk_level }}%; background: {{ info.color }};"></div>
+                    </div>
+                    {% if info.detected_count > 0 %}
+                    <div class="mt-2 text-end">
+                        <small class="fw-bold" style="color: {{ info.color }};">
+                            <i class="fas fa-exclamation-circle me-1"></i>{{ info.detected_count }} detected
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% for atype, info in encyclopedia.items() %}
+<div class="attack-detail-modal" id="modal-{{ atype }}">
+    <div class="attack-detail-content">
+        <div class="detail-header" style="background: linear-gradient(135deg, {{ info.color }}, {{ info.color }}cc);">
+            <button onclick="closeModal('{{ atype }}')" style="position: absolute; top: 1rem; right: 1rem; background: rgba(255,255,255,0.2); border: none; color: white; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 1.1rem;">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="d-flex align-items-center gap-3">
+                <div style="width: 56px; height: 56px; border-radius: 14px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+                    <i class="fas {{ info.icon }}"></i>
+                </div>
+                <div>
+                    <h3 class="mb-1 fw-bold">{{ atype }}</h3>
+                    <small style="opacity: 0.85;">{{ info.full_name }}</small>
+                </div>
+            </div>
+            {% if info.detected_count > 0 %}
+            <div class="detected-badge"><i class="fas fa-chart-bar me-1"></i>{{ info.detected_count }} detected in system</div>
+            {% endif %}
+        </div>
+        <div class="detail-body">
+            <h6 class="fw-bold mb-3"><i class="fas fa-info-circle me-2" style="color: {{ info.color }};"></i>Description</h6>
+            <p class="text-muted" style="font-size: 0.9rem; line-height: 1.7;">{{ info.description }}</p>
+
+            <h6 class="fw-bold mb-3 mt-4"><i class="fas fa-cogs me-2" style="color: {{ info.color }};"></i>How It Works</h6>
+            <p class="text-muted" style="font-size: 0.9rem; line-height: 1.7;">{{ info.how_it_works }}</p>
+
+            <h6 class="fw-bold mb-3 mt-4"><i class="fas fa-search me-2" style="color: {{ info.color }};"></i>Indicators of Compromise</h6>
+            {% for ind in info.indicators %}
+            <div class="indicator-item">
+                <div class="indicator-dot" style="background: {{ info.color }};"></div>
+                <span>{{ ind }}</span>
+            </div>
+            {% endfor %}
+
+            <h6 class="fw-bold mb-3 mt-4"><i class="fas fa-shield-alt me-2" style="color: #10b981;"></i>Prevention Strategies</h6>
+            {% for prev in info.prevention %}
+            <div class="prevention-item">
+                <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                <span>{{ prev }}</span>
+            </div>
+            {% endfor %}
+
+            <h6 class="fw-bold mb-3 mt-4"><i class="fas fa-globe me-2" style="color: {{ info.color }};"></i>Real-World Example</h6>
+            <div style="background: linear-gradient(135deg, {{ info.color }}08, {{ info.color }}04); border-radius: 12px; padding: 1rem; border-left: 4px solid {{ info.color }};">
+                <p class="mb-0 text-muted" style="font-size: 0.9rem; font-style: italic;">{{ info.real_world }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function showAttackDetail(type) {
+        document.getElementById('modal-' + type).classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeModal(type) {
+        document.getElementById('modal-' + type).classList.remove('show');
+        document.body.style.overflow = '';
+    }
+    document.querySelectorAll('.attack-detail-modal').forEach(modal => {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.classList.remove('show');
+                document.body.style.overflow = '';
+            }
+        });
+    });
+</script>
+{% endblock %}
